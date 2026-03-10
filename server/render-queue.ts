@@ -7,33 +7,46 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 interface JobData {
-  titleText: string;
+  templateId: string;
+  compositionId: string;
+  inputProps: Record<string, unknown>;
 }
 
 type JobState =
   | {
       status: "queued";
       data: JobData;
+      createdAt: number;
+      updatedAt: number;
       cancel: () => void;
     }
   | {
       status: "in-progress";
       progress: number;
       data: JobData;
+      createdAt: number;
+      startedAt: number;
+      updatedAt: number;
       cancel: () => void;
     }
   | {
       status: "completed";
       videoUrl: string;
       data: JobData;
+      createdAt: number;
+      startedAt: number;
+      completedAt: number;
+      updatedAt: number;
     }
   | {
       status: "failed";
       error: Error;
       data: JobData;
+      createdAt: number;
+      startedAt?: number;
+      completedAt: number;
+      updatedAt: number;
     };
-
-const compositionId = "HelloWorld";
 
 export const makeRenderQueue = ({
   port,
@@ -54,22 +67,24 @@ export const makeRenderQueue = ({
     }
 
     const { cancel, cancelSignal } = makeCancelSignal();
+    const startedAt = Date.now();
 
     jobs.set(jobId, {
       progress: 0,
       status: "in-progress",
       cancel: cancel,
       data: job.data,
+      createdAt: job.createdAt,
+      startedAt,
+      updatedAt: startedAt,
     });
 
     try {
-      const inputProps = {
-        titleText: job.data.titleText,
-      };
+      const inputProps = job.data.inputProps;
 
       const composition = await selectComposition({
         serveUrl,
-        id: compositionId,
+        id: job.data.compositionId,
         inputProps,
       });
 
@@ -81,27 +96,41 @@ export const makeRenderQueue = ({
         codec: "h264",
         onProgress: (progress) => {
           console.info(`${jobId} render progress:`, progress.progress);
+          const updatedAt = Date.now();
           jobs.set(jobId, {
             progress: progress.progress,
             status: "in-progress",
             cancel: cancel,
             data: job.data,
+            createdAt: job.createdAt,
+            startedAt,
+            updatedAt,
           });
         },
         outputLocation: path.join(rendersDir, `${jobId}.mp4`),
       });
 
+      const completedAt = Date.now();
       jobs.set(jobId, {
         status: "completed",
         videoUrl: `http://localhost:${port}/renders/${jobId}.mp4`,
         data: job.data,
+        createdAt: job.createdAt,
+        startedAt,
+        completedAt,
+        updatedAt: completedAt,
       });
     } catch (error) {
       console.error(error);
+      const completedAt = Date.now();
       jobs.set(jobId, {
         status: "failed",
         error: error as Error,
         data: job.data,
+        createdAt: job.createdAt,
+        startedAt,
+        completedAt,
+        updatedAt: completedAt,
       });
     }
   };
@@ -113,9 +142,12 @@ export const makeRenderQueue = ({
     jobId: string;
     data: JobData;
   }) => {
+    const createdAt = Date.now();
     jobs.set(jobId, {
       status: "queued",
       data,
+      createdAt,
+      updatedAt: createdAt,
       cancel: () => {
         jobs.delete(jobId);
       },

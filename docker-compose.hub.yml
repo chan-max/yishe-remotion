@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  yishe-remotion:
+    image: ${DOCKER_USERNAME}/yishe-remotion:latest
+    container_name: yishe-remotion
+    ports:
+      - "1572:1572"
+    volumes:
+      - ./renders:/app/renders
+    environment:
+      - NODE_ENV=production
+      - PORT=1572
+      - REMOTION_SERVE_URL=build
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 3G
+        reservations:
+          cpus: "0.5"
+          memory: 512M

@@ -31,7 +31,7 @@ npm i
 npm run dev
 ```
 
-This will start the Express server that handles render requests in watch mode for development.
+This will start the Express server that handles render requests in watch mode for development (default port 1572).
 
 **Run in Production**
 
@@ -63,7 +63,7 @@ The template includes Docker support out of the box. Build and run the container
 
 ```console
 docker build -t remotion-render-server .
-docker run -d -p 3000:3000 remotion-render-server
+docker run -d -p 1572:1572 remotion-render-server
 ```
 
 ## Docs

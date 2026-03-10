@@ -34,8 +34,11 @@ RUN npx remotion browser ensure
 RUN npx remotion bundle
 # By default, bundle command will create "build" directory with the bundle
 ENV REMOTION_SERVE_URL=build
+ENV PORT=1572
 
 ENV NODE_ENV=production
+
+EXPOSE 1572
 
 # Start the server
 CMD ["npm", "start"]
