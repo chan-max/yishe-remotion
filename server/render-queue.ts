@@ -113,7 +113,7 @@ export const makeRenderQueue = ({
       const completedAt = Date.now();
       jobs.set(jobId, {
         status: "completed",
-        videoUrl: `http://localhost:${port}/renders/${jobId}.mp4`,
+        videoUrl: `/renders/${jobId}.mp4`,
         data: job.data,
         createdAt: job.createdAt,
         startedAt,

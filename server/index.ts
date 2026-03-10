@@ -336,12 +336,16 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
 
     if (result.status === "completed") {
       const job = queue.jobs.get(jobId);
+      // Build full videoUrl with host
+      const host = req.headers.host || `localhost:${PORT}`;
+      const protocol = req.protocol || 'http';
+      const videoUrl = `${protocol}://${host}${result.videoUrl}`;
       res.json(
         success(
           {
             jobId,
             status: "completed",
-            videoUrl: result.videoUrl,
+            videoUrl,
             createdAt: job?.createdAt ?? null,
             startedAt: job?.startedAt ?? null,
             completedAt: job?.completedAt ?? null,
