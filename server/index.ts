@@ -336,10 +336,22 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
 
     if (result.status === "completed") {
       const job = queue.jobs.get(jobId);
-      // Build full videoUrl with host
-      const host = req.headers.host || `localhost:${PORT}`;
+      // Build full videoUrl with local IP
+      const os = require('os');
+      function getLocalIp() {
+        const interfaces = os.networkInterfaces();
+        for (const name of Object.keys(interfaces)) {
+          for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+              return iface.address;
+            }
+          }
+        }
+        return '127.0.0.1';
+      }
+      const localIp = getLocalIp();
       const protocol = req.protocol || 'http';
-      const videoUrl = `${protocol}://${host}${result.videoUrl}`;
+      const videoUrl = `${protocol}://${localIp}:${PORT}${result.videoUrl}`;
       res.json(
         success(
           {
@@ -349,8 +361,8 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
             createdAt: job?.createdAt ?? null,
             startedAt: job?.startedAt ?? null,
             completedAt: job?.completedAt ?? null,
-            elapsedMs: job?.completedAt && job?.startedAt
-              ? job.completedAt - job.startedAt
+            elapsedMs: (job && 'completedAt' in job && 'startedAt' in job && typeof job.completedAt === 'number' && typeof job.startedAt === 'number')
+              ? (job.completedAt as number) - (job.startedAt as number)
               : null,
           },
           "渲染完成",
@@ -432,7 +444,28 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
       return;
     }
 
-    res.json(success(formatJob(job), "获取任务状态成功"));
+    // Patch videoUrl to full path with local IP if present
+    let patchedJob = { ...job };
+    if (patchedJob.status === "completed" && typeof patchedJob.videoUrl === "string") {
+      const os = require('os');
+      function getLocalIp() {
+        const interfaces = os.networkInterfaces();
+        for (const name of Object.keys(interfaces)) {
+          for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+              return iface.address;
+            }
+          }
+        }
+        return '127.0.0.1';
+      }
+      const localIp = getLocalIp();
+      const protocol = req.protocol || 'http';
+      if (!patchedJob.videoUrl.startsWith("http")) {
+        patchedJob.videoUrl = `${protocol}://${localIp}:${PORT}${patchedJob.videoUrl}`;
+      }
+    }
+    res.json(success(formatJob(patchedJob), "获取任务状态成功"));
   });
 
   app.get("/renders/:jobId", (req, res) => {
