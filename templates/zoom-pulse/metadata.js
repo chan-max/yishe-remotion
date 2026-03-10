@@ -15,5 +15,11 @@ module.exports = {
     minScale: 1,
     maxScale: 1.1,
   },
+  assetSummary: "1张图片, 2个数值参数",
+  assets: [
+    { key: "imageUrl", type: "image", label: "图片资源" },
+    { key: "minScale", type: "number", label: "最小缩放比" },
+    { key: "maxScale", type: "number", label: "最大缩放比" },
+  ],
   editableFields: ["imageUrl", "minScale", "maxScale"],
 };

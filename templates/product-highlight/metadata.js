@@ -16,6 +16,14 @@ module.exports = {
     backgroundColor: "#0F172A",
     textColor: "#E2E8F0",
   },
+  assetSummary: "2段文字, 3个颜色控制",
+  assets: [
+    { key: "productName", type: "text", label: "产品名称" },
+    { key: "slogan", type: "text", label: "标语" },
+    { key: "accentColor", type: "color", label: "强调色" },
+    { key: "backgroundColor", type: "color", label: "背景颜色" },
+    { key: "textColor", type: "color", label: "文字颜色" },
+  ],
   editableFields: [
     "productName",
     "slogan",

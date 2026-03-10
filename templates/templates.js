@@ -16,6 +16,13 @@ const templates = [
       logoColor1: "#91EAE4",
       logoColor2: "#86A8E7",
     },
+    assetSummary: "1段文字, 3个颜色控制",
+    assets: [
+      { key: "titleText", type: "text", label: "标题内容" },
+      { key: "titleColor", type: "color", label: "标题颜色" },
+      { key: "logoColor1", type: "color", label: "Logo颜色1" },
+      { key: "logoColor2", type: "color", label: "Logo颜色2" },
+    ],
     editableFields: ["titleText", "titleColor", "logoColor1", "logoColor2"],
   },
   {
@@ -33,6 +40,13 @@ const templates = [
       backgroundColor: "#111827",
       textColor: "#F9FAFB",
     },
+    assetSummary: "2段文字, 2个颜色控制",
+    assets: [
+      { key: "quote", type: "text", label: "金句内容" },
+      { key: "author", type: "text", label: "作者/来源" },
+      { key: "backgroundColor", type: "color", label: "背景颜色" },
+      { key: "textColor", type: "color", label: "文字颜色" },
+    ],
     editableFields: ["quote", "author", "backgroundColor", "textColor"],
   },
   {
@@ -51,6 +65,14 @@ const templates = [
       backgroundColor: "#0F172A",
       textColor: "#E2E8F0",
     },
+    assetSummary: "2段文字, 3个颜色控制",
+    assets: [
+      { key: "productName", type: "text", label: "产品名称" },
+      { key: "slogan", type: "text", label: "标语" },
+      { key: "accentColor", type: "color", label: "强调色" },
+      { key: "backgroundColor", type: "color", label: "背景颜色" },
+      { key: "textColor", type: "color", label: "文字颜色" },
+    ],
     editableFields: [
       "productName",
       "slogan",
@@ -58,6 +80,29 @@ const templates = [
       "backgroundColor",
       "textColor",
     ],
+  },
+  {
+    id: "zoom-pulse",
+    name: "Zoom Pulse",
+    description: "图片缓慢缩放律动效果",
+    compositionId: "ZoomPulse",
+    durationInFrames: 240,
+    fps: 30,
+    width: 1920,
+    height: 1080,
+    defaultInputProps: {
+      imageUrl:
+        "https://images.pexels.com/photos/1726310/pexels-photo-1726310.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+      minScale: 1,
+      maxScale: 1.1,
+    },
+    assetSummary: "1张图片, 2个数值参数",
+    assets: [
+      { key: "imageUrl", type: "image", label: "图片资源" },
+      { key: "minScale", type: "number", label: "最小缩放比" },
+      { key: "maxScale", type: "number", label: "最大缩放比" },
+    ],
+    editableFields: ["imageUrl", "minScale", "maxScale"],
   },
 ];
 

@@ -410,6 +410,9 @@ createApp({
                 </div>
               <div v-if="selectedTemplate" class="muted" style="margin-top:8px;">
                 {{ selectedTemplate.description }} · {{ selectedTemplate.width }}x{{ selectedTemplate.height }} · {{ selectedTemplate.fps }}fps
+                <div v-if="selectedTemplate.assetSummary" style="margin-top:4px; color:#2563eb; font-weight:500;">
+                  <i class="info circle icon"></i> 资源需求: {{ selectedTemplate.assetSummary }}
+                </div>
               </div>
             </div>
             <div>

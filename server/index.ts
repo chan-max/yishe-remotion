@@ -18,6 +18,8 @@ const { loadTemplates } = require("../templates/index.js") as {
     height: number;
     defaultInputProps: Record<string, unknown>;
     editableFields: string[];
+    assetSummary?: string;
+    assets?: Array<{ key: string; type: string; label: string; description?: string }>;
   }>;
 };
 
@@ -200,6 +202,8 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
           height: template.height,
           defaultInputProps: template.defaultInputProps,
           editableFields: template.editableFields,
+          assetSummary: template.assetSummary,
+          assets: template.assets,
         })),
         "获取模板列表成功",
       ),
