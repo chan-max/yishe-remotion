@@ -14,39 +14,42 @@ interface JobData {
 
 type JobState =
   | {
-      status: "queued";
-      data: JobData;
-      createdAt: number;
-      updatedAt: number;
-      cancel: () => void;
-    }
+    status: "queued";
+    data: JobData;
+    createdAt: number;
+    updatedAt: number;
+    cancel: () => void;
+    startedAt?: number;
+    completedAt?: number;
+  }
   | {
-      status: "in-progress";
-      progress: number;
-      data: JobData;
-      createdAt: number;
-      startedAt: number;
-      updatedAt: number;
-      cancel: () => void;
-    }
+    status: "in-progress";
+    progress: number;
+    data: JobData;
+    createdAt: number;
+    startedAt: number;
+    updatedAt: number;
+    cancel: () => void;
+    completedAt?: number;
+  }
   | {
-      status: "completed";
-      videoUrl: string;
-      data: JobData;
-      createdAt: number;
-      startedAt: number;
-      completedAt: number;
-      updatedAt: number;
-    }
+    status: "completed";
+    videoUrl: string;
+    data: JobData;
+    createdAt: number;
+    startedAt: number;
+    completedAt: number;
+    updatedAt: number;
+  }
   | {
-      status: "failed";
-      error: Error;
-      data: JobData;
-      createdAt: number;
-      startedAt?: number;
-      completedAt: number;
-      updatedAt: number;
-    };
+    status: "failed";
+    error: Error;
+    data: JobData;
+    createdAt: number;
+    startedAt?: number;
+    completedAt: number;
+    updatedAt: number;
+  };
 
 export const makeRenderQueue = ({
   port,

@@ -248,7 +248,8 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
       ...template.defaultInputProps,
     } as Record<string, unknown>;
 
-    for (const field of template.editableFields) {
+    const metadataFields = ["width", "height", "durationInFrames", "fps"];
+    for (const field of [...template.editableFields, ...metadataFields]) {
       if (field in inputProps) {
         sanitizedInputProps[field] = (inputProps as Record<string, unknown>)[field];
       }
@@ -324,7 +325,8 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
       ...template.defaultInputProps,
     } as Record<string, unknown>;
 
-    for (const field of template.editableFields) {
+    const metadataFields = ["width", "height", "durationInFrames", "fps"];
+    for (const field of [...template.editableFields, ...metadataFields]) {
       if (field in inputProps) {
         sanitizedInputProps[field] = (inputProps as Record<string, unknown>)[field];
       }
@@ -365,8 +367,8 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
             createdAt: job?.createdAt ?? null,
             startedAt: job?.startedAt ?? null,
             completedAt: job?.completedAt ?? null,
-            elapsedMs: (job && 'completedAt' in job && 'startedAt' in job && typeof job.completedAt === 'number' && typeof job.startedAt === 'number')
-              ? (job.completedAt as number) - (job.startedAt as number)
+            elapsedMs: (typeof job?.completedAt === 'number' && typeof job?.startedAt === 'number')
+              ? job.completedAt - job.startedAt
               : null,
           },
           "渲染完成",
@@ -407,8 +409,13 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
 
   app.post("/renders", async (req, res) => {
     const templates = getTemplates();
-    const templateId = req.body?.templateId || "hello-world";
+    const templateId = req.body?.templateId;
     const inputProps = req.body?.inputProps ?? req.body ?? {};
+
+    if (!templateId) {
+      res.status(400).json({ message: "templateId is required" });
+      return;
+    }
 
     const template = templates.find((item) => item.id === templateId);
 
