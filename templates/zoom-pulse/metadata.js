@@ -36,3 +36,26 @@ module.exports = {
     "durationInFrames",
   ],
 };
+
+/**
+ * [参数实例 / API 调用参考]
+ * 
+ * 1. 默认律动展示:
+ * {
+ *   "templateId": "zoom-pulse",
+ *   "inputProps": {
+ *     "imageUrl": "https://example.com/photo.jpg"
+ *   }
+ * }
+ * 
+ * 2. 快速短视频卡点:
+ * {
+ *   "templateId": "zoom-pulse",
+ *   "inputProps": {
+ *     "imageUrl": "https://example.com/fast.jpg",
+ *     "minScale": 1.2,
+ *     "maxScale": 1.5,
+ *     "durationInFrames": 60
+ *   }
+ * }
+ */

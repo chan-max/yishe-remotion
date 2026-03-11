@@ -39,3 +39,27 @@ module.exports = {
         "durationInFrames",
     ],
 };
+
+/**
+ * [参数实例 / API 调用参考]
+ * 
+ * 1. 文字幻灯片 (5秒):
+ * {
+ *   "templateId": "text-slide",
+ *   "inputProps": {
+ *     "text": "Hello Remotion World",
+ *     "durationInFrames": 150
+ *   }
+ * }
+ * 
+ * 2. 特大标题 (2秒快闪):
+ * {
+ *   "templateId": "text-slide",
+ *   "inputProps": {
+ *     "text": "WOW!",
+ *     "fontSize": 300,
+ *     "backgroundColor": "#000000",
+ *     "durationInFrames": 60
+ *   }
+ * }
+ */

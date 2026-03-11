@@ -42,15 +42,33 @@ export const RemotionRoot: React.FC = () => {
               key={metadata.id}
               id={compositionId}
               component={Component}
-              // 支持动态参数覆盖元数据（时长、宽高、FPS）
-              calculateMetadata={({ props }: { props: any }) => ({
-                durationInFrames: Number(
-                  props.durationInFrames || metadata.durationInFrames || 240,
-                ),
-                fps: Number(props.fps || metadata.fps || 30),
-                width: Number(props.width || metadata.width || 1080),
-                height: Number(props.height || metadata.height || 1920),
-              })}
+              // 增强：增加“提前钩子”支持
+              calculateMetadata={async ({ props }: { props: any }) => {
+                // 1. 默认的元数据计算逻辑
+                const defaultMetadata = {
+                  durationInFrames: Number(
+                    props.durationInFrames || metadata.durationInFrames || 240,
+                  ),
+                  fps: Number(props.fps || metadata.fps || 30),
+                  width: Number(props.width || metadata.width || 1080),
+                  height: Number(props.height || metadata.height || 1920),
+                  props, // 默认透传所有的 props
+                };
+
+                // 2. 如果 metadata.js 里定义了 calculateMetadata 钩子，则执行它
+                if (typeof metadata.calculateMetadata === "function") {
+                  const customMetadata = await metadata.calculateMetadata({
+                    props,
+                    defaultMetadata,
+                  });
+                  return {
+                    ...defaultMetadata,
+                    ...customMetadata,
+                  };
+                }
+
+                return defaultMetadata;
+              }}
               schema={schema}
               defaultProps={metadata.defaultInputProps}
             />

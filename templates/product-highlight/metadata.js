@@ -41,3 +41,28 @@ module.exports = {
     "durationInFrames",
   ],
 };
+
+/**
+ * [参数实例 / API 调用参考]
+ * 
+ * 1. 标准产品展示:
+ * {
+ *   "templateId": "product-highlight",
+ *   "inputProps": {
+ *     "productName": "新款智能手表",
+ *     "slogan": "定义未来生活"
+ *   }
+ * }
+ * 
+ * 2. 电商主图比例 (1:1 正方形):
+ * {
+ *   "templateId": "product-highlight",
+ *   "inputProps": {
+ *     "productName": "限时特惠",
+ *     "slogan": "全场买一送一",
+ *     "width": 1000,
+ *     "height": 1000,
+ *     "accentColor": "#ff0000"
+ *   }
+ * }
+ */

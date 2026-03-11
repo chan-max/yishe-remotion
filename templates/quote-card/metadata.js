@@ -38,3 +38,28 @@ module.exports = {
     "durationInFrames",
   ],
 };
+
+/**
+ * [参数实例 / API 调用参考]
+ * 
+ * 1. 标准渲染 (默认尺寸):
+ * {
+ *   "templateId": "quote-card",
+ *   "inputProps": {
+ *     "quote": "Stay hungry, stay foolish.",
+ *     "author": "Steve Jobs"
+ *   }
+ * }
+ * 
+ * 2. 动态比例 (高清横屏):
+ * {
+ *   "templateId": "quote-card",
+ *   "inputProps": {
+ *     "quote": "每一个不曾起舞的日子，都是对生命的辜负。",
+ *     "author": "尼采",
+ *     "width": 1920,
+ *     "height": 1080,
+ *     "durationInFrames": 150
+ *   }
+ * }
+ */
