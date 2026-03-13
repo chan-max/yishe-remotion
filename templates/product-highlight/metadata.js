@@ -40,6 +40,16 @@ module.exports = {
     "height",
     "durationInFrames",
   ],
+  inputSchema: [
+    { key: 'productName', type: 'text', label: '产品名称', description: '主要标题，建议短而有力', required: true, placeholder: '例如：智能手表' , example: 'Remotion API' },
+    { key: 'slogan', type: 'text', label: '标语', description: '副标题或促销语', required: false, example: '一键生成品牌视频' },
+    { key: 'accentColor', type: 'color', label: '强调色', description: '用于按钮或高亮元素', required: false, example: '#22C55E' },
+    { key: 'backgroundColor', type: 'color', label: '背景颜色', description: '页面背景色', required: false, example: '#0F172A' },
+    { key: 'textColor', type: 'color', label: '文字颜色', description: '正文文字色', required: false, example: '#E2E8F0' },
+    { key: 'width', type: 'number', label: '视频宽度', description: '输出宽度(px)', required: false, example: 1920 },
+    { key: 'height', type: 'number', label: '视频高度', description: '输出高度(px)', required: false, example: 1080 },
+    { key: 'durationInFrames', type: 'number', label: '总帧数', description: '视频总帧数', required: false, example: 210 }
+  ],
 };
 
 /**

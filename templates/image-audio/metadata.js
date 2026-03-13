@@ -30,6 +30,60 @@ module.exports = {
   ],
   editableFields: ["image", "audio", "width", "height", "audioDuration", "durationInFrames"],
 
+  inputSchema: [
+    {
+      key: 'image',
+      type: 'asset',
+      label: '图片',
+      description: '封面图片 URL 或 COS 路径，支持 https:// 或 data: URI。优先使用宽高匹配的视频尺寸。',
+      required: true,
+      placeholder: 'https://example.com/photo.jpg',
+      example: 'https://example.com/photo.jpg'
+    },
+    {
+      key: 'audio',
+      type: 'asset',
+      label: '音频',
+      description: '音频文件 URL（MP3 等），如果未提供 audioDuration，模板会尽量读取音频实际时长。',
+      required: true,
+      placeholder: 'https://example.com/music.mp3',
+      example: 'https://example.com/music.mp3'
+    },
+    {
+      key: 'audioDuration',
+      type: 'number',
+      label: '音频时长（秒）',
+      description: '可选，若提供则按此时长计算总帧数；否则尝试从音频文件读取时长。',
+      required: false,
+      min: 0,
+      example: 12
+    },
+    {
+      key: 'width',
+      type: 'number',
+      label: '视频宽度(px)',
+      description: '输出宽度，若留空使用模板默认',
+      required: false,
+      example: 1080
+    },
+    {
+      key: 'height',
+      type: 'number',
+      label: '视频高度(px)',
+      description: '输出高度，若留空使用模板默认',
+      required: false,
+      example: 1920
+    },
+    {
+      key: 'durationInFrames',
+      type: 'number',
+      label: '总帧数',
+      description: '可由 audioDuration 与 fps 计算得到，一般不需手动设置',
+      required: false,
+      example: 300
+    }
+  ],
+
   // 如果传入 audioDuration，则按 audioDuration 与 fps 计算总帧数
   calculateMetadata({ props, defaultMetadata }) {
     const fps = Number(props.fps || defaultMetadata.fps || 30);

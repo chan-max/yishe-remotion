@@ -29,6 +29,74 @@ module.exports = {
         { key: "height", type: "number", label: "视频高度" },
         { key: "durationInFrames", type: "number", label: "总帧数" },
     ],
+    // 更详细的前端可用参数描述，前端表单可优先使用 inputSchema
+    inputSchema: [
+        {
+            key: 'text',
+            type: 'text',
+            label: '文本内容',
+            description: '用于显示的主文本；支持换行与简单的换行符。',
+            required: true,
+            placeholder: '例如：欢迎使用动态模板',
+            example: 'Hello Remotion World'
+        },
+        {
+            key: 'fontSize',
+            type: 'number',
+            label: '字号',
+            description: '文本的像素字号，影响布局与换行。',
+            required: false,
+            min: 8,
+            max: 1000,
+            example: 80
+        },
+        {
+            key: 'backgroundColor',
+            type: 'color',
+            label: '背景颜色',
+            description: '页面背景颜色，推荐使用 6 位 HEX 值。',
+            required: false,
+            example: '#4f46e5'
+        },
+        {
+            key: 'textColor',
+            type: 'color',
+            label: '文字颜色',
+            description: '文本颜色，建议与背景有足够对比度。',
+            required: false,
+            example: '#ffffff'
+        },
+        {
+            key: 'width',
+            type: 'number',
+            label: '视频宽度',
+            description: '输出视频宽度(px)。前端可用于切换比例预设（如 1920x1080/1080x1920）。',
+            required: false,
+            min: 160,
+            max: 3840,
+            example: 1920
+        },
+        {
+            key: 'height',
+            type: 'number',
+            label: '视频高度',
+            description: '输出视频高度(px)。',
+            required: false,
+            min: 160,
+            max: 3840,
+            example: 1080
+        },
+        {
+            key: 'durationInFrames',
+            type: 'number',
+            label: '总帧数',
+            description: '视频总帧数，配合 fps 决定时长；默认 150 帧 (5 秒 @30fps)。',
+            required: false,
+            min: 1,
+            max: 10000,
+            example: 150
+        }
+    ],
     editableFields: [
         "text",
         "fontSize",

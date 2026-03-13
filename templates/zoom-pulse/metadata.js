@@ -35,6 +35,14 @@ module.exports = {
     "height",
     "durationInFrames",
   ],
+  inputSchema: [
+    { key: 'imageUrl', type: 'image', label: '图片资源', description: '用于缩放律动的图片 URL，建议提供与输出分辨率接近的图片', required: true, example: 'https://example.com/photo.jpg' },
+    { key: 'minScale', type: 'number', label: '最小缩放比', description: '起始缩放倍率，>= 0.1，通常为 1', required: false, min: 0.1, max: 10, example: 1 },
+    { key: 'maxScale', type: 'number', label: '最大缩放比', description: '结束缩放倍率，建议不超过 3 倍以保证画质', required: false, min: 0.1, max: 10, example: 1.1 },
+    { key: 'width', type: 'number', label: '视频宽度', description: '输出宽度(px)', required: false, example: 1920 },
+    { key: 'height', type: 'number', label: '视频高度', description: '输出高度(px)', required: false, example: 1080 },
+    { key: 'durationInFrames', type: 'number', label: '总帧数', description: '视频总帧数', required: false, example: 240 }
+  ],
 };
 
 /**

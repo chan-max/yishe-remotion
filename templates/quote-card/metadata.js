@@ -28,6 +28,69 @@ module.exports = {
     { key: "height", type: "number", label: "视频高度" },
     { key: "durationInFrames", type: "number", label: "总帧数(时长)" },
   ],
+  inputSchema: [
+    {
+      key: 'quote',
+      type: 'text',
+      label: '金句内容',
+      description: '主体引用文本，尽量控制在可视区域内（建议行数 <= 4）',
+      required: true,
+      placeholder: '例如：好内容值得被看见',
+      example: 'Stay hungry, stay foolish.'
+    },
+    {
+      key: 'author',
+      type: 'text',
+      label: '作者/来源',
+      description: '引用来源或作者，可为空',
+      required: false,
+      example: 'Steve Jobs'
+    },
+    {
+      key: 'backgroundColor',
+      type: 'color',
+      label: '背景颜色',
+      description: '背景色，使用 HEX 值。',
+      required: false,
+      example: '#111827'
+    },
+    {
+      key: 'textColor',
+      type: 'color',
+      label: '文字颜色',
+      description: '文字颜色，确保与背景对比明显。',
+      required: false,
+      example: '#F9FAFB'
+    },
+    {
+      key: 'width',
+      type: 'number',
+      label: '视频宽度',
+      description: '输出宽度(px)',
+      required: false,
+      min: 160,
+      max: 3840,
+      example: 1080
+    },
+    {
+      key: 'height',
+      type: 'number',
+      label: '视频高度',
+      description: '输出高度(px)',
+      required: false,
+      min: 160,
+      max: 3840,
+      example: 1920
+    },
+    {
+      key: 'durationInFrames',
+      type: 'number',
+      label: '总帧数(时长)',
+      description: '总帧数决定时长，默认 240 帧。',
+      required: false,
+      example: 240
+    }
+  ],
   editableFields: [
     "quote",
     "author",
