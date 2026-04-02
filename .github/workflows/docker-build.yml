@@ -11,10 +11,10 @@ name: Build and Push Docker Image
 #    - SERVER_DEPLOY_PATH: 服务器部署路径（可选，默认 /workspace/yishe-remotion）
 #    - SERVER_PORT: SSH 端口（可选，默认 22）
 # 2. 工作流程：
-#    - 推送 main 分支且 package.json 变化时触发
-#    - 读取 package.json 版本号
-#    - 构建并推送 Docker 镜像
-#    - 可选：通过 SSH 在服务器拉取最新镜像并启动
+#    - 推送 main 分支时触发（监听所有源码路径）
+#    - 检查 package.json 的 version 是否相比上一次 commit 发生了变化
+#    - version 未变则跳过构建，直接结束
+#    - version 有变则构建并推送 Docker 镜像，然后部署到服务器
 
 on:
   push:
@@ -22,6 +22,11 @@ on:
       - main
     paths:
       - "package.json"
+      - "ui/**"
+      - "server/**"
+      - "templates/**"
+      - "remotion/**"
+      - "Dockerfile"
 
 jobs:
   build-and-push:
@@ -30,33 +35,59 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
-      - name: Read version from package.json
-        id: package-version
+      - name: Check if version changed
+        id: version-check
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "📦 当前版本: $VERSION"
+          CURRENT=$(node -p "require('./package.json').version")
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+
+          # 获取上一个 commit 的 package.json version
+          PREV=$(git show HEAD~1:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "none")
+          echo "previous=$PREV" >> $GITHUB_OUTPUT
+
+          if [ "$CURRENT" = "$PREV" ]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "⏭️  version 未变化 ($CURRENT)，跳过构建"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "🆕 version 变化: $PREV → $CURRENT，开始构建"
+          fi
+
+      - name: Skip summary
+        if: steps.version-check.outputs.changed == 'false'
+        run: |
+          echo "## ⏭️ 跳过构建" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**原因**: package.json version 未发生变化（当前: \`${{ steps.version-check.outputs.current }}\`）" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "如需触发构建，请更新 package.json 中的 version 字段后再 push。" >> $GITHUB_STEP_SUMMARY
 
       - name: Set up Docker Buildx
+        if: steps.version-check.outputs.changed == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
+        if: steps.version-check.outputs.changed == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Extract metadata for Docker
+        if: steps.version-check.outputs.changed == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ secrets.DOCKER_USERNAME }}/yishe-remotion
           tags: |
-            type=raw,value=${{ steps.package-version.outputs.version }}
+            type=raw,value=${{ steps.version-check.outputs.current }}
             type=raw,value=latest
 
       - name: Build and push Docker image
+        if: steps.version-check.outputs.changed == 'true'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -69,29 +100,20 @@ jobs:
           cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/yishe-remotion:buildcache,mode=max
 
       - name: Summary
+        if: steps.version-check.outputs.changed == 'true'
         run: |
           echo "## 🐳 Docker 镜像构建成功" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**镜像名称**: \`${{ secrets.DOCKER_USERNAME }}/yishe-remotion\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**版本标签**: \`${{ steps.package-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**标签**: \`latest\`, \`${{ steps.package-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📥 使用方式" >> $GITHUB_STEP_SUMMARY
+          echo "**版本**: \`${{ steps.version-check.outputs.previous }}\` → \`${{ steps.version-check.outputs.current }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "# 拉取最新版本" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ secrets.DOCKER_USERNAME }}/yishe-remotion:${{ steps.package-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "# 或拉取 latest 标签" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ secrets.DOCKER_USERNAME }}/yishe-remotion:${{ steps.version-check.outputs.current }}" >> $GITHUB_STEP_SUMMARY
           echo "docker pull ${{ secrets.DOCKER_USERNAME }}/yishe-remotion:latest" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "# 运行容器" >> $GITHUB_STEP_SUMMARY
-          echo "docker run -d -p 1572:1572 ${{ secrets.DOCKER_USERNAME }}/yishe-remotion:${{ steps.package-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Check deployment configuration
+        if: steps.version-check.outputs.changed == 'true'
         id: check-deploy
         run: |
           if [ -z "${{ secrets.SERVER_HOST }}" ]; then
@@ -103,8 +125,7 @@ jobs:
           fi
 
       - name: Deploy to Server
-        id: deploy
-        if: steps.check-deploy.outputs.skip_deploy == 'false'
+        if: steps.version-check.outputs.changed == 'true' && steps.check-deploy.outputs.skip_deploy == 'false'
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -120,18 +141,13 @@ jobs:
             echo "🚀 开始部署到服务器..."
             echo "📂 部署路径: $DEPLOY_PATH"
 
-            if [ ! -d "$DEPLOY_PATH" ]; then
-              echo "📁 目录不存在，正在创建: $DEPLOY_PATH"
-              mkdir -p $DEPLOY_PATH || { echo "❌ 错误: 无法创建目录 $DEPLOY_PATH"; exit 1; }
-            fi
-
-            cd $DEPLOY_PATH || { echo "❌ 错误: 无法进入目录 $DEPLOY_PATH"; exit 1; }
+            mkdir -p $DEPLOY_PATH
+            cd $DEPLOY_PATH || { echo "❌ 无法进入目录 $DEPLOY_PATH"; exit 1; }
 
             if [ ! -f "docker-compose.hub.yml" ]; then
-              echo "📄 docker-compose.hub.yml 文件不存在，正在自动创建..."
+              echo "📄 docker-compose.hub.yml 不存在，自动创建..."
               cat > docker-compose.hub.yml << EOF
             version: '3.8'
-
             services:
               yishe-remotion:
                 image: ${DOCKER_USERNAME}/yishe-remotion:latest
@@ -154,16 +170,10 @@ jobs:
                       cpus: '0.5'
                       memory: 512M
             EOF
-              echo "✅ docker-compose.hub.yml 文件创建成功（镜像: ${DOCKER_USERNAME}/yishe-remotion:latest）"
+              echo "✅ docker-compose.hub.yml 创建成功"
             fi
 
-            echo "📁 根据 docker-compose.hub.yml 中的 volumes 配置创建必要的目录..."
-            grep -E '^\s+-\s+\./' docker-compose.hub.yml 2>/dev/null | sed -E 's/.*\.\/([^:]+):.*/\1/' | while read -r dir; do
-              if [ -n "$dir" ]; then
-                mkdir -p "$dir"
-                echo "✅ 已创建目录: $dir"
-              fi
-            done
+            mkdir -p renders
 
             echo "📦 拉取最新镜像..."
             docker pull ${DOCKER_USERNAME}/yishe-remotion:latest
