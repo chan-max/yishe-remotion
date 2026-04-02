@@ -3,32 +3,33 @@ import { makeRenderQueue } from "./render-queue";
 import { bundle } from "@remotion/bundler";
 import path from "node:path";
 import fs from "node:fs";
+import os from "node:os";
 import { ensureBrowser } from "@remotion/renderer";
 import { success, error, ErrorCode } from "./response";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { loadTemplates } = require("../templates/index.js") as {
-  loadTemplates: () => Array<{
-    id: string;
-    name: string;
-    description: string;
-    compositionId: string;
-    durationInFrames: number;
-    fps: number;
-    width: number;
-    height: number;
-    defaultInputProps: Record<string, unknown>;
-    editableFields: string[];
-    assetSummary?: string;
-    assets?: Array<{ key: string; type: string; label: string; description?: string }>;
-  }>;
-};
+import { publicTemplateCatalog } from "../templates/registry";
 
 const { PORT = 1572, REMOTION_SERVE_URL } = process.env;
+
+const getLocalIp = () => {
+  const interfaces = os.networkInterfaces();
+
+  for (const name of Object.keys(interfaces)) {
+    const interfaceList = interfaces[name] ?? [];
+
+    for (const iface of interfaceList) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+
+  return "127.0.0.1";
+};
 
 function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
   const app = express();
 
-  const getTemplates = () => loadTemplates();
+  const getTemplates = () => publicTemplateCatalog;
 
   const rendersDir = path.resolve("renders");
 
@@ -121,6 +122,21 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
   app.use("/", express.static(path.resolve("ui")));
   app.use(express.json());
 
+  app.get("/api/health", (_req, res) => {
+    res.json(
+      success(
+        {
+          service: "yishe-remotion",
+          status: "ok",
+          templateCount: getTemplates().length,
+          bundleUrl: remotionBundleUrl,
+          timestamp: new Date().toISOString(),
+        },
+        "Remotion 服务健康检查成功",
+      ),
+    );
+  });
+
   // List render output files/folders with pagination
   app.get("/api/renders-folders", async (req, res) => {
     try {
@@ -165,8 +181,8 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
         res.status(400).json(error(ErrorCode.INVALID_REQUEST, "names 必须为非空数组"));
         return;
       }
-      let deleted: string[] = [];
-      let failed: { name: string, error: string }[] = [];
+      const deleted: string[] = [];
+      const failed: { name: string, error: string }[] = [];
       for (const name of names) {
         const fullPath = path.join(rendersDir, name);
         try {
@@ -204,6 +220,15 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
           editableFields: template.editableFields,
           assetSummary: template.assetSummary,
           assets: template.assets,
+          inputSchema: template.inputSchema,
+          category: template.category,
+          style: template.style,
+          useCase: template.useCase,
+          durationLabel: template.durationLabel,
+          tags: template.tags,
+          scenes: template.scenes,
+          animationHighlights: template.animationHighlights,
+          example: template.example,
         })),
         "获取模板列表成功",
       ),
@@ -342,21 +367,8 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
 
     if (result.status === "completed") {
       const job = queue.jobs.get(jobId);
-      // Build full videoUrl with local IP
-      const os = require('os');
-      function getLocalIp() {
-        const interfaces = os.networkInterfaces();
-        for (const name of Object.keys(interfaces)) {
-          for (const iface of interfaces[name]) {
-            if (iface.family === 'IPv4' && !iface.internal) {
-              return iface.address;
-            }
-          }
-        }
-        return '127.0.0.1';
-      }
       const localIp = getLocalIp();
-      const protocol = req.protocol || 'http';
+      const protocol = req.protocol || "http";
       const videoUrl = `${protocol}://${localIp}:${PORT}${result.videoUrl}`;
       res.json(
         success(
@@ -367,7 +379,7 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
             createdAt: job?.createdAt ?? null,
             startedAt: job?.startedAt ?? null,
             completedAt: job?.completedAt ?? null,
-            elapsedMs: (typeof job?.completedAt === 'number' && typeof job?.startedAt === 'number')
+            elapsedMs: (typeof job?.completedAt === "number" && typeof job?.startedAt === "number")
               ? job.completedAt - job.startedAt
               : null,
           },
@@ -456,22 +468,10 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
     }
 
     // Patch videoUrl to full path with local IP if present
-    let patchedJob = { ...job };
+    const patchedJob = { ...job };
     if (patchedJob.status === "completed" && typeof patchedJob.videoUrl === "string") {
-      const os = require('os');
-      function getLocalIp() {
-        const interfaces = os.networkInterfaces();
-        for (const name of Object.keys(interfaces)) {
-          for (const iface of interfaces[name]) {
-            if (iface.family === 'IPv4' && !iface.internal) {
-              return iface.address;
-            }
-          }
-        }
-        return '127.0.0.1';
-      }
       const localIp = getLocalIp();
-      const protocol = req.protocol || 'http';
+      const protocol = req.protocol || "http";
       if (!patchedJob.videoUrl.startsWith("http")) {
         patchedJob.videoUrl = `${protocol}://${localIp}:${PORT}${patchedJob.videoUrl}`;
       }
