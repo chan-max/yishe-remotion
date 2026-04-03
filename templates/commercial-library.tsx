@@ -1398,6 +1398,12 @@ export const ComparisonSplitTemplate: React.FC<
     leftScoreValue !== null && rightScoreValue !== null
       ? `${(rightScoreValue - leftScoreValue).toFixed(1)} point lift`
       : "visual lift";
+  const activeMetricIndex = Math.min(
+    metrics.length - 1,
+    Math.floor((frame / durationInFrames) * metrics.length),
+  );
+  const activeMetric = metrics[activeMetricIndex] ?? metrics[0];
+  const dividerSweep = ((frame * 1.6) % Math.max(260, height * 0.82)) - 80;
 
   return (
     <GradientStage palette={palette} frame={frame}>
@@ -1570,6 +1576,46 @@ export const ComparisonSplitTemplate: React.FC<
             style={{
               position: "absolute",
               left: `${divider * 100}%`,
+              top: "8%",
+              bottom: "8%",
+              width: 82,
+              transform: `translateX(calc(-50% + ${Math.sin(frame / 18) * 3}px))`,
+              background: `linear-gradient(180deg, transparent 0%, ${alpha(
+                "#ffffff",
+                0.12,
+              )} 18%, ${alpha(palette.accentAlt, 0.22)} 50%, ${alpha(
+                "#ffffff",
+                0.12,
+              )} 82%, transparent 100%)`,
+              maskImage: `linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.95) 18%, rgba(0,0,0,0.95) 82%, transparent 100%)`,
+              opacity: 0.7,
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: `${divider * 100}%`,
+              top: dividerSweep,
+              width: 176,
+              height: 132,
+              transform: "translateX(-50%) rotate(90deg)",
+              background: `linear-gradient(90deg, transparent 0%, ${alpha(
+                "#ffffff",
+                0.08,
+              )} 24%, ${alpha(palette.accent, 0.28)} 50%, ${alpha(
+                "#ffffff",
+                0.08,
+              )} 76%, transparent 100%)`,
+              filter: "blur(14px)",
+              opacity: 0.72,
+              pointerEvents: "none",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: `${divider * 100}%`,
               top: 50,
               transform: "translateX(-50%)",
               padding: "10px 14px",
@@ -1584,6 +1630,64 @@ export const ComparisonSplitTemplate: React.FC<
             }}
           >
             Compare Shift
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              left: `${divider * 100}%`,
+              bottom: 26,
+              transform: "translateX(-50%)",
+              width: Math.min(360, width * 0.3),
+            }}
+          >
+            <StageFrame palette={palette} radius={24} padding={18}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  marginBottom: 10,
+                }}
+              >
+                <SectionEyebrow text="Key Lift" palette={palette} />
+                <TagPill
+                  text={`${pad2(activeMetricIndex + 1)} / ${pad2(metrics.length)}`}
+                  palette={palette}
+                />
+              </div>
+              <div
+                style={{
+                  color: palette.text,
+                  fontSize: 24,
+                  fontWeight: 800,
+                  lineHeight: 1.16,
+                }}
+              >
+                {activeMetric?.label}
+              </div>
+              <div
+                style={{
+                  marginTop: 8,
+                  color: alpha(palette.text, 0.74),
+                  fontSize: 18,
+                  lineHeight: 1.45,
+                }}
+              >
+                {activeMetric
+                  ? `${Math.round(activeMetric.value)} / 100 performance readout`
+                  : scoreDeltaLabel}
+              </div>
+              <div style={{ marginTop: 12 }}>
+                {renderProgressTrack({
+                  progress: activeMetric ? activeMetric.value / 100 : comparisonProgress,
+                  palette,
+                  leftLabel: "focus metric",
+                  rightLabel: scoreDeltaLabel,
+                })}
+              </div>
+            </StageFrame>
           </div>
 
           <div
@@ -2650,6 +2754,17 @@ export const CinematicStoryTemplate: React.FC<
     fadeOut: 20,
   });
   const storyProgress = clamp01(frame / Math.max(1, durationInFrames - 1));
+  const chapterWindow = sceneWindow({
+    frame: chapterFrame,
+    start: 0,
+    end: chapterDuration,
+    fadeIn: 18,
+    fadeOut: 22,
+  });
+  const chapterReveal = clamp01((chapterFrame - 6) / 18);
+  const storyBeamOffset = ((frame * 1.2) % (width * 0.88 + 320)) - 180;
+  const mediaDriftX = Math.sin(frame / 30) * 14;
+  const mediaDriftY = Math.cos(frame / 26) * 10;
 
   return (
     <GradientStage palette={palette} frame={frame}>
@@ -2661,8 +2776,50 @@ export const CinematicStoryTemplate: React.FC<
           position: "absolute",
           inset: 0,
           borderRadius: 0,
-          opacity: 0.36,
-          filter: "contrast(1.04) saturate(0.94)",
+          opacity: mix(0.18, 0.42, chapterWindow),
+          filter: "contrast(1.04) saturate(0.94) brightness(0.84)",
+          clipPath: `polygon(${mix(100, 0, chapterReveal)}% 0%, 100% 0%, 100% 100%, 0% 100%, 0% ${mix(
+            100,
+            0,
+            chapterReveal,
+          )}%)`,
+          transform: `scale(${mix(1.16, 1.04, chapterProgress)}) translate3d(${mediaDriftX}px, ${mediaDriftY}px, 0)`,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: height * 0.16,
+          left: storyBeamOffset,
+          width: width * 0.72,
+          height: 68,
+          borderRadius: 999,
+          background: `linear-gradient(90deg, transparent 0%, ${alpha(
+            palette.accentAlt,
+            0.18,
+          )} 38%, ${alpha("#ffffff", 0.12)} 52%, transparent 100%)`,
+          transform: "rotate(-9deg)",
+          filter: "blur(8px)",
+          opacity: 0.82,
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          right: -width * 0.08,
+          bottom: height * 0.22,
+          width: width * 0.52,
+          height: 54,
+          borderRadius: 999,
+          background: `linear-gradient(90deg, transparent 0%, ${alpha(
+            palette.accent,
+            0.18,
+          )} 42%, transparent 100%)`,
+          transform: "rotate(14deg)",
+          filter: "blur(10px)",
+          opacity: 0.7,
+          pointerEvents: "none",
         }}
       />
       <div
@@ -2800,17 +2957,15 @@ export const CinematicStoryTemplate: React.FC<
                 marginBottom: 12,
               }}
             >
-              <div
-                style={{
-                  color: alpha(palette.text, 0.72),
-                  fontSize: 18,
-                  letterSpacing: "0.16em",
-                  textTransform: "uppercase",
-                  fontWeight: 700,
-                }}
-              >
-                Subtitle Track
-              </div>
+              <SectionEyebrow text="Subtitle Track" palette={palette} />
+              {renderWaveBars({
+                frame: frame + chapterIndex * 5,
+                palette,
+                bars: 6,
+                width: 4,
+                minHeight: 7,
+                maxHeight: 18,
+              })}
               <TagPill
                 text={`${pad2(chapterIndex + 1)} / ${pad2(chapters.length)}`}
                 palette={palette}
@@ -2835,6 +2990,38 @@ export const CinematicStoryTemplate: React.FC<
                 rightLabel: chapter.eyebrow,
               })}
             </div>
+            <div
+              style={{
+                marginTop: 16,
+                padding: "14px 16px",
+                borderRadius: 18,
+                background: alpha("#ffffff", 0.06),
+                border: `1px solid ${alpha("#ffffff", 0.08)}`,
+              }}
+            >
+              <div
+                style={{
+                  color: alpha(palette.text, 0.5),
+                  fontSize: 13,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  fontWeight: 700,
+                }}
+              >
+                Narrative Beat
+              </div>
+              <div
+                style={{
+                  marginTop: 8,
+                  color: palette.text,
+                  fontSize: 22,
+                  lineHeight: 1.32,
+                  fontWeight: 700,
+                }}
+              >
+                {chapter.title}
+              </div>
+            </div>
           </StageFrame>
         </div>
 
@@ -2842,23 +3029,41 @@ export const CinematicStoryTemplate: React.FC<
           style={{
             display: "grid",
             gridTemplateColumns: `repeat(${chapters.length}, minmax(0, 1fr))`,
-          gap: 12,
-          alignItems: "end",
-        }}
-      >
+            gap: 12,
+            alignItems: "end",
+          }}
+        >
           {chapters.map((item, index) => (
             <div
               key={`${item.title}-${index}`}
               style={{
                 display: "grid",
                 gap: 8,
-              }}
-            >
-              <div
-                style={{
-                  height: index === chapterIndex ? 68 : 26,
-                  borderRadius: 18,
-                  background:
+                }}
+              >
+                <div
+                  style={{
+                    color:
+                      index === chapterIndex
+                        ? alpha(palette.text, 0.82)
+                        : alpha(palette.text, 0.4),
+                    fontSize: 11,
+                    letterSpacing: "0.14em",
+                    textTransform: "uppercase",
+                    fontWeight: 700,
+                    textAlign: "center",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {item.eyebrow}
+                </div>
+                <div
+                  style={{
+                    height: index === chapterIndex ? 68 : 26,
+                    borderRadius: 18,
+                    background:
                     index === chapterIndex
                       ? `linear-gradient(90deg, ${palette.accent} 0%, ${palette.accentAlt} 100%)`
                       : alpha("#ffffff", 0.12),
@@ -2947,9 +3152,27 @@ export const KnowledgeCardsTemplate: React.FC<
     (frame - chapterIndex * chapterSegment) / chapterSegment,
   );
   const knowledgeProgress = clamp01(frame / Math.max(1, durationInFrames - 1));
+  const activeFact = facts[chapterIndex % facts.length] ?? facts[0];
+  const mediaReveal = clamp01((frame - 10) / 20);
 
   return (
     <GradientStage palette={palette} frame={frame}>
+      <div
+        style={{
+          position: "absolute",
+          top: 86,
+          left: -160 + Math.sin(frame / 26) * 28,
+          width: width * 0.58,
+          height: 52,
+          borderRadius: 999,
+          background: `linear-gradient(90deg, transparent 0%, ${alpha(
+            palette.accent,
+            0.16,
+          )} 42%, transparent 100%)`,
+          transform: "rotate(-12deg)",
+          opacity: 0.84,
+        }}
+      />
       <div
         style={{
           position: "absolute",
@@ -3113,6 +3336,11 @@ export const KnowledgeCardsTemplate: React.FC<
               frame={frame}
               style={{
                 height: width > height ? height * 0.34 : height * 0.28,
+                clipPath: `polygon(${mix(100, 0, mediaReveal)}% 0%, 100% 0%, 100% 100%, 0% 100%, 0% ${mix(
+                  100,
+                  0,
+                  mediaReveal,
+                )}%)`,
               }}
             />
             <div
@@ -3140,6 +3368,67 @@ export const KnowledgeCardsTemplate: React.FC<
               >
                 {chapter.eyebrow || "knowledge"}
               </div>
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                left: 20,
+                bottom: 20,
+                width: width > height ? "74%" : "86%",
+                transform: `translateY(${mix(30, 0, mediaReveal)}px)`,
+                opacity: mediaReveal,
+              }}
+            >
+              <StageFrame palette={palette} radius={22} padding={18}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 12,
+                    flexWrap: "wrap",
+                    marginBottom: 10,
+                  }}
+                >
+                  <SectionEyebrow text={chapter.eyebrow || "Focus"} palette={palette} />
+                  {renderWaveBars({
+                    frame,
+                    palette,
+                    bars: 6,
+                    width: 4,
+                    minHeight: 7,
+                    maxHeight: 18,
+                  })}
+                </div>
+                <div
+                  style={{
+                    color: palette.text,
+                    fontSize: 24,
+                    lineHeight: 1.2,
+                    fontWeight: 800,
+                  }}
+                >
+                  {activeFact?.label}
+                </div>
+                <div
+                  style={{
+                    marginTop: 8,
+                    color: alpha(palette.text, 0.74),
+                    fontSize: 17,
+                    lineHeight: 1.55,
+                  }}
+                >
+                  {activeFact?.detail || chapter.title}
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  {renderProgressTrack({
+                    progress: (chapterIndex + 1) / chapters.length,
+                    palette,
+                    leftLabel: "knowledge arc",
+                    rightLabel: activeFact?.value || cta,
+                  })}
+                </div>
+              </StageFrame>
             </div>
           </div>
         </div>
@@ -4057,9 +4346,31 @@ export const LaunchKeynoteTemplate: React.FC<
     (frame - milestoneIndex * (durationInFrames / milestones.length)) /
       (durationInFrames / milestones.length),
   );
+  const activeSpecIndex = Math.min(
+    specs.length - 1,
+    Math.floor((frame / durationInFrames) * specs.length),
+  );
+  const activeSpec = specs[activeSpecIndex] ?? specs[0];
+  const mediaReveal = clamp01((frame - 8) / 20);
 
   return (
     <GradientStage palette={palette} frame={frame}>
+      <div
+        style={{
+          position: "absolute",
+          top: 88,
+          left: -220 + Math.sin(frame / 22) * 36,
+          width: width * 0.76,
+          height: 58,
+          borderRadius: 999,
+          background: `linear-gradient(90deg, transparent 0%, ${alpha(
+            palette.accentAlt,
+            0.16,
+          )} 36%, transparent 100%)`,
+          transform: "rotate(-10deg)",
+          opacity: 0.82,
+        }}
+      />
       <div
         style={{
           position: "absolute",
@@ -4179,6 +4490,11 @@ export const LaunchKeynoteTemplate: React.FC<
               frame={frame}
               style={{
                 minHeight: width > height ? height * 0.42 : height * 0.32,
+                clipPath: `polygon(${mix(100, 0, mediaReveal)}% 0%, 100% 0%, 100% 100%, 0% 100%, 0% ${mix(
+                  100,
+                  0,
+                  mediaReveal,
+                )}%)`,
                 transform: `perspective(1800px) rotateY(${mix(12, 0, hero)}deg) scale(${mix(0.9, 1, hero)})`,
               }}
             />
@@ -4207,6 +4523,77 @@ export const LaunchKeynoteTemplate: React.FC<
               >
                 {milestones[milestoneIndex]}
               </div>
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                right: 24,
+                bottom: 24,
+                width: width > height ? "42%" : "78%",
+                opacity: mediaReveal,
+                transform: `translateY(${mix(30, 0, mediaReveal)}px)`,
+              }}
+            >
+              <StageFrame palette={palette} radius={24} padding={18}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 12,
+                    flexWrap: "wrap",
+                    marginBottom: 10,
+                  }}
+                >
+                  <SectionEyebrow text="Spec Focus" palette={palette} />
+                  {renderWaveBars({
+                    frame,
+                    palette,
+                    bars: 7,
+                    width: 4,
+                    minHeight: 7,
+                    maxHeight: 18,
+                  })}
+                </div>
+                <div
+                  style={{
+                    color: palette.text,
+                    fontSize: 26,
+                    fontWeight: 800,
+                    lineHeight: 1.16,
+                  }}
+                >
+                  {activeSpec?.label}
+                </div>
+                <div
+                  style={{
+                    marginTop: 8,
+                    color: alpha(palette.text, 0.78),
+                    fontSize: 22,
+                    fontWeight: 800,
+                  }}
+                >
+                  {activeSpec?.value}
+                </div>
+                <div
+                  style={{
+                    marginTop: 8,
+                    color: alpha(palette.text, 0.68),
+                    fontSize: 17,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {activeSpec?.detail || releaseNote}
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  {renderProgressTrack({
+                    progress: (activeSpecIndex + 1) / specs.length,
+                    palette,
+                    leftLabel: "spec rotation",
+                    rightLabel: `${pad2(activeSpecIndex + 1)} / ${pad2(specs.length)}`,
+                  })}
+                </div>
+              </StageFrame>
             </div>
           </div>
           <div style={{ display: "grid", gap: 18 }}>
