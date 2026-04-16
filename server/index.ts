@@ -34,7 +34,6 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
   const rendersDir = runtimePaths.rendersDir;
 
   const queue = makeRenderQueue({
-    port: Number(PORT),
     serveUrl: remotionBundleUrl,
     rendersDir,
     browserExecutable: runtimePaths.browserExecutable,
@@ -68,6 +67,46 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
       completedAt: job.completedAt ?? null,
       updatedAt: job.updatedAt ?? now,
       elapsedMs,
+    };
+  };
+
+  const buildPublicVideoUrl = (videoUrl: string, req: express.Request) => {
+    if (!videoUrl || videoUrl.startsWith("http")) {
+      return videoUrl;
+    }
+
+    const localIp = getLocalIp();
+    const protocol = req.protocol || "http";
+    return `${protocol}://${localIp}:${PORT}${videoUrl}`;
+  };
+
+  const formatJobResponse = (
+    jobId: string,
+    job: {
+      status: string;
+      data: unknown;
+      progress?: number;
+      videoUrl?: string;
+      error?: Error;
+      createdAt?: number;
+      startedAt?: number;
+      completedAt?: number;
+      updatedAt?: number;
+    },
+    req: express.Request,
+  ) => {
+    const patchedJob = { ...job };
+
+    if (
+      patchedJob.status === "completed" &&
+      typeof patchedJob.videoUrl === "string"
+    ) {
+      patchedJob.videoUrl = buildPublicVideoUrl(patchedJob.videoUrl, req);
+    }
+
+    return {
+      id: jobId,
+      ...formatJob(patchedJob),
     };
   };
 
@@ -117,10 +156,10 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
     });
   };
 
-
   // Host renders on /renders
   app.use("/renders", express.static(rendersDir));
-  const semanticDir = runtimePaths.semanticDir ?? path.resolve("node_modules/fomantic-ui-css");
+  const semanticDir =
+    runtimePaths.semanticDir ?? path.resolve("node_modules/fomantic-ui-css");
   if (fs.existsSync(semanticDir)) {
     app.use("/semantic", express.static(semanticDir));
   }
@@ -146,7 +185,10 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
   app.get("/api/renders-folders", async (req, res) => {
     try {
       const page = Math.max(1, parseInt(req.query.page as string) || 1);
-      const pageSize = Math.max(1, Math.min(100, parseInt(req.query.pageSize as string) || 20));
+      const pageSize = Math.max(
+        1,
+        Math.min(100, parseInt(req.query.pageSize as string) || 20),
+      );
       const files = await fs.promises.readdir(rendersDir);
       // Only show files/folders, optionally filter by extension
       const allStats = await Promise.all(
@@ -161,20 +203,29 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
             ctime: stat.ctime,
             path: fullPath,
           };
-        })
+        }),
       );
       // Sort by mtime desc
       allStats.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
       const total = allStats.length;
       const paged = allStats.slice((page - 1) * pageSize, page * pageSize);
-      res.json(success({
-        list: paged,
-        page,
-        pageSize,
-        total,
-      }, "获取渲染输出文件夹列表成功"));
+      res.json(
+        success(
+          {
+            list: paged,
+            page,
+            pageSize,
+            total,
+          },
+          "获取渲染输出文件夹列表成功",
+        ),
+      );
     } catch (err) {
-      res.status(500).json(error(ErrorCode.INTERNAL_ERROR, "读取渲染输出文件夹失败", { err: String(err) }));
+      res.status(500).json(
+        error(ErrorCode.INTERNAL_ERROR, "读取渲染输出文件夹失败", {
+          err: String(err),
+        }),
+      );
     }
   });
 
@@ -183,11 +234,13 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
     try {
       const { names } = req.body;
       if (!Array.isArray(names) || names.length === 0) {
-        res.status(400).json(error(ErrorCode.INVALID_REQUEST, "names 必须为非空数组"));
+        res
+          .status(400)
+          .json(error(ErrorCode.INVALID_REQUEST, "names 必须为非空数组"));
         return;
       }
       const deleted: string[] = [];
-      const failed: { name: string, error: string }[] = [];
+      const failed: { name: string; error: string }[] = [];
       for (const name of names) {
         const fullPath = path.join(rendersDir, name);
         try {
@@ -204,7 +257,11 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
       }
       res.json(success({ deleted, failed }, "删除渲染输出文件/文件夹完成"));
     } catch (err) {
-      res.status(500).json(error(ErrorCode.INTERNAL_ERROR, "删除渲染输出文件夹失败", { err: String(err) }));
+      res.status(500).json(
+        error(ErrorCode.INTERNAL_ERROR, "删除渲染输出文件夹失败", {
+          err: String(err),
+        }),
+      );
     }
   });
 
@@ -238,6 +295,32 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
         "获取模板列表成功",
       ),
     );
+  });
+
+  app.get("/api/renders", (req, res) => {
+    const statusPriority: Record<string, number> = {
+      "in-progress": 0,
+      queued: 1,
+      failed: 2,
+      completed: 3,
+    };
+
+    const jobs = Array.from(queue.jobs.entries())
+      .sort(([, left], [, right]) => {
+        const priorityGap =
+          (statusPriority[left.status] ?? 99) -
+          (statusPriority[right.status] ?? 99);
+        if (priorityGap !== 0) {
+          return priorityGap;
+        }
+
+        const leftTimestamp = left.updatedAt ?? left.createdAt ?? 0;
+        const rightTimestamp = right.updatedAt ?? right.createdAt ?? 0;
+        return rightTimestamp - leftTimestamp;
+      })
+      .map(([jobId, job]) => formatJobResponse(jobId, job, req));
+
+    res.json(success(jobs, "获取任务列表成功"));
   });
 
   // Endpoint to create a new job
@@ -281,7 +364,9 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
     const metadataFields = ["width", "height", "durationInFrames", "fps"];
     for (const field of [...template.editableFields, ...metadataFields]) {
       if (field in inputProps) {
-        sanitizedInputProps[field] = (inputProps as Record<string, unknown>)[field];
+        sanitizedInputProps[field] = (inputProps as Record<string, unknown>)[
+          field
+        ];
       }
     }
 
@@ -358,7 +443,9 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
     const metadataFields = ["width", "height", "durationInFrames", "fps"];
     for (const field of [...template.editableFields, ...metadataFields]) {
       if (field in inputProps) {
-        sanitizedInputProps[field] = (inputProps as Record<string, unknown>)[field];
+        sanitizedInputProps[field] = (inputProps as Record<string, unknown>)[
+          field
+        ];
       }
     }
 
@@ -384,9 +471,11 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
             createdAt: job?.createdAt ?? null,
             startedAt: job?.startedAt ?? null,
             completedAt: job?.completedAt ?? null,
-            elapsedMs: (typeof job?.completedAt === "number" && typeof job?.startedAt === "number")
-              ? job.completedAt - job.startedAt
-              : null,
+            elapsedMs:
+              typeof job?.completedAt === "number" &&
+              typeof job?.startedAt === "number"
+                ? job.completedAt - job.startedAt
+                : null,
           },
           "渲染完成",
         ),
@@ -395,15 +484,11 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
     }
 
     if (result.status === "failed") {
-      res
-        .status(500)
-        .json(
-          error(
-            ErrorCode.INTERNAL_ERROR,
-            result.error?.message || "渲染失败",
-            { jobId },
-          ),
-        );
+      res.status(500).json(
+        error(ErrorCode.INTERNAL_ERROR, result.error?.message || "渲染失败", {
+          jobId,
+        }),
+      );
       return;
     }
 
@@ -414,14 +499,12 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
       return;
     }
 
-    res
-      .status(202)
-      .json(
-        error(ErrorCode.INTERNAL_ERROR, "渲染超时，请改用异步轮询", {
-          jobId,
-          status: "in-progress",
-        }),
-      );
+    res.status(202).json(
+      error(ErrorCode.INTERNAL_ERROR, "渲染超时，请改用异步轮询", {
+        jobId,
+        status: "in-progress",
+      }),
+    );
   });
 
   app.post("/renders", async (req, res) => {
@@ -447,7 +530,9 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
 
     for (const field of template.editableFields) {
       if (field in inputProps) {
-        sanitizedInputProps[field] = (inputProps as Record<string, unknown>)[field];
+        sanitizedInputProps[field] = (inputProps as Record<string, unknown>)[
+          field
+        ];
       }
     }
 
@@ -466,22 +551,11 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
     const job = queue.jobs.get(jobId);
 
     if (!job) {
-      res
-        .status(404)
-        .json(error(ErrorCode.JOB_NOT_FOUND, "Job not found"));
+      res.status(404).json(error(ErrorCode.JOB_NOT_FOUND, "Job not found"));
       return;
     }
 
-    // Patch videoUrl to full path with local IP if present
-    const patchedJob = { ...job };
-    if (patchedJob.status === "completed" && typeof patchedJob.videoUrl === "string") {
-      const localIp = getLocalIp();
-      const protocol = req.protocol || "http";
-      if (!patchedJob.videoUrl.startsWith("http")) {
-        patchedJob.videoUrl = `${protocol}://${localIp}:${PORT}${patchedJob.videoUrl}`;
-      }
-    }
-    res.json(success(formatJob(patchedJob), "获取任务状态成功"));
+    res.json(success(formatJobResponse(jobId, job, req), "获取任务状态成功"));
   });
 
   app.get("/renders/:jobId", (req, res) => {
@@ -503,21 +577,14 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
     const job = queue.jobs.get(jobId);
 
     if (!job) {
-      res
-        .status(404)
-        .json(error(ErrorCode.JOB_NOT_FOUND, "Job not found"));
+      res.status(404).json(error(ErrorCode.JOB_NOT_FOUND, "Job not found"));
       return;
     }
 
     if (job.status !== "queued" && job.status !== "in-progress") {
       res
         .status(400)
-        .json(
-          error(
-            ErrorCode.JOB_NOT_CANCELLABLE,
-            "Job is not cancellable",
-          ),
-        );
+        .json(error(ErrorCode.JOB_NOT_CANCELLABLE, "Job is not cancellable"));
       return;
     }
 
@@ -565,14 +632,14 @@ async function main() {
     : fs.existsSync(runtimePaths.buildDir)
       ? runtimePaths.buildDir
       : await (async () => {
-        const { bundle } = await import("@remotion/bundler");
-        return bundle({
-          entryPoint: path.resolve("remotion/index.ts"),
-          onProgress(progress) {
-            console.info(`Bundling Remotion project: ${progress}%`);
-          },
-        });
-      })();
+          const { bundle } = await import("@remotion/bundler");
+          return bundle({
+            entryPoint: path.resolve("remotion/index.ts"),
+            onProgress(progress) {
+              console.info(`Bundling Remotion project: ${progress}%`);
+            },
+          });
+        })();
 
   const app = setupApp({ remotionBundleUrl });
 

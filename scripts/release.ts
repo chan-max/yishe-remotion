@@ -1,8 +1,36 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { ensureBrowser } from "@remotion/renderer";
+
+type DesktopPlatform = "windows" | "macos";
+type DesktopArch = "x64" | "arm64";
+
+type ReleaseTarget = {
+  platform: DesktopPlatform;
+  arch: DesktopArch;
+  slug: string;
+  installerStableSuffix: string;
+  installerVersionedSuffix: string;
+};
+
+type RuntimeAssetSnapshot = {
+  browserExecutableRelativePath: string;
+  compositorRootRelativePath: string;
+  ffmpegRelativePath: string;
+  ffprobeRelativePath: string;
+};
+
+type AliasedArtifact = {
+  kind: "installer" | "manifest" | "checksums";
+  sizeBytes: number;
+  sha256: string;
+  stableFileName: string;
+  stablePath: string;
+  versionedFileName: string;
+  versionedPath: string;
+};
 
 const root = process.cwd();
 const releaseRoot = path.join(root, "release");
@@ -16,18 +44,18 @@ const packageJson = JSON.parse(
 
 const productName = "yishe-video-tool";
 const displayName = "Yishe Video Tool";
-const platform = process.platform;
-const executableName = platform === "win32" ? `${productName}.exe` : productName;
-const compiledExecutable = path.join(stageRoot, executableName);
 const version = process.env.RELEASE_VERSION ?? packageJson.version;
-const releaseTag = process.env.GITHUB_REF_NAME ?? `v${version}`;
+const releaseTag = process.env.RELEASE_TAG ?? `v${version}`;
+const repository = process.env.GITHUB_REPOSITORY
+  ? `https://github.com/${process.env.GITHUB_REPOSITORY}`
+  : null;
+
+const executableName =
+  process.platform === "win32" ? `${productName}.exe` : productName;
+const compiledExecutable = path.join(stageRoot, executableName);
 
 const removeIfExists = async (targetPath: string) => {
   await fs.promises.rm(targetPath, { recursive: true, force: true });
-};
-
-const escapeForNsis = (value: string) => {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 };
 
 const ensureDir = async (targetPath: string) => {
@@ -59,29 +87,147 @@ const runBun = (args: string[]) => {
   runCommand(process.execPath, args);
 };
 
-const getCompositorPackageDir = () => {
-  switch (platform) {
-    case "win32":
-      if (process.arch !== "x64") {
-        throw new Error(`Windows only supports x64 right now, current arch: ${process.arch}`);
-      }
-      return path.dirname(require.resolve("@remotion/compositor-win32-x64-msvc/package.json"));
-    case "darwin":
-      if (process.arch === "arm64") {
-        return path.dirname(require.resolve("@remotion/compositor-darwin-arm64/package.json"));
-      }
-      if (process.arch === "x64") {
-        return path.dirname(require.resolve("@remotion/compositor-darwin-x64/package.json"));
-      }
-      throw new Error(`Unsupported macOS arch: ${process.arch}`);
-    default:
-      throw new Error(`Installer packaging is only scripted for Windows/macOS, current platform: ${platform}`);
-  }
+const escapeForNsis = (value: string) => {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 };
 
-const getReleaseFileName = (extension: string) => {
-  const platformName = platform === "win32" ? "windows-x64" : `macos-${process.arch}`;
-  return `${productName}-${releaseTag}-${platformName}${extension}`;
+const findFirstMatchingFile = (rootDir: string, fileNames: string[]) => {
+  if (!fs.existsSync(rootDir)) {
+    return null;
+  }
+
+  const normalizedNames = new Set(
+    fileNames.map((fileName) => fileName.toLowerCase()),
+  );
+  const queue = [rootDir];
+
+  while (queue.length > 0) {
+    const currentDir = queue.shift();
+    if (!currentDir) {
+      continue;
+    }
+
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        queue.push(fullPath);
+        continue;
+      }
+
+      if (normalizedNames.has(entry.name.toLowerCase())) {
+        return fullPath;
+      }
+    }
+  }
+
+  return null;
+};
+
+const relativeToBundleRoot = (absolutePath: string) => {
+  return path.relative(bundleRoot, absolutePath).replace(/\\/g, "/");
+};
+
+const sha256File = async (targetPath: string) => {
+  return new Promise<string>((resolve, reject) => {
+    const hash = createHash("sha256");
+    const stream = fs.createReadStream(targetPath);
+
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("end", () => resolve(hash.digest("hex")));
+    stream.on("error", reject);
+  });
+};
+
+const createAliasedArtifact = async ({
+  kind,
+  sourcePath,
+  stableFileName,
+  versionedFileName,
+}: {
+  kind: AliasedArtifact["kind"];
+  sourcePath: string;
+  stableFileName: string;
+  versionedFileName: string;
+}) => {
+  const versionedPath = path.join(artifactsRoot, versionedFileName);
+  const stablePath = path.join(artifactsRoot, stableFileName);
+
+  await copyFile(sourcePath, versionedPath);
+  await copyFile(sourcePath, stablePath);
+
+  const stats = await fs.promises.stat(sourcePath);
+  const sha256 = await sha256File(sourcePath);
+
+  return {
+    kind,
+    sizeBytes: stats.size,
+    sha256,
+    stableFileName,
+    stablePath,
+    versionedFileName,
+    versionedPath,
+  } satisfies AliasedArtifact;
+};
+
+const buildReleaseTarget = (): ReleaseTarget => {
+  if (process.platform === "win32") {
+    if (process.arch !== "x64") {
+      throw new Error(
+        `Windows only supports x64 right now, current arch: ${process.arch}`,
+      );
+    }
+
+    return {
+      platform: "windows",
+      arch: "x64",
+      slug: "windows-x64",
+      installerStableSuffix: "windows-x64-setup.exe",
+      installerVersionedSuffix: `${releaseTag}-windows-x64-setup.exe`,
+    };
+  }
+
+  if (process.platform === "darwin") {
+    if (process.arch !== "x64" && process.arch !== "arm64") {
+      throw new Error(`Unsupported macOS arch: ${process.arch}`);
+    }
+
+    const arch = process.arch as DesktopArch;
+    return {
+      platform: "macos",
+      arch,
+      slug: `macos-${arch}`,
+      installerStableSuffix: `macos-${arch}.dmg`,
+      installerVersionedSuffix: `${releaseTag}-macos-${arch}.dmg`,
+    };
+  }
+
+  throw new Error(
+    `Installer packaging is only scripted for Windows/macOS, current platform: ${process.platform}`,
+  );
+};
+
+const releaseTarget = buildReleaseTarget();
+
+const getCompositorPackageDir = () => {
+  switch (releaseTarget.platform) {
+    case "windows":
+      return path.dirname(
+        require.resolve("@remotion/compositor-win32-x64-msvc/package.json"),
+      );
+    case "macos":
+      if (releaseTarget.arch === "arm64") {
+        return path.dirname(
+          require.resolve("@remotion/compositor-darwin-arm64/package.json"),
+        );
+      }
+
+      return path.dirname(
+        require.resolve("@remotion/compositor-darwin-x64/package.json"),
+      );
+    default:
+      throw new Error(`Unsupported release target: ${releaseTarget.platform}`);
+  }
 };
 
 const stageRuntimeAssets = async () => {
@@ -91,11 +237,12 @@ const stageRuntimeAssets = async () => {
   console.log("Building Remotion bundle...");
   runBun(["x", "remotion", "bundle"]);
 
-  console.log("Compiling application executable...");
+  console.log("Preparing desktop release stage...");
   await removeIfExists(releaseRoot);
   await ensureDir(bundleRoot);
   await ensureDir(artifactsRoot);
 
+  console.log("Compiling application executable...");
   runBun([
     "build",
     "--compile",
@@ -114,16 +261,62 @@ const stageRuntimeAssets = async () => {
 
   const browserCacheRoot = path.join(root, "node_modules", ".remotion");
 
-  console.log("Copying packaged resources...");
+  console.log("Copying packaged runtime resources...");
   await copyDir(path.join(root, "ui"), path.join(bundleRoot, "ui"));
   await copyDir(path.join(root, "build"), path.join(bundleRoot, "build"));
-  await copyDir(path.join(root, "templates"), path.join(bundleRoot, "templates"));
+  await copyDir(
+    path.join(root, "templates"),
+    path.join(bundleRoot, "templates"),
+  );
   await copyDir(browserCacheRoot, path.join(bundleRoot, "browser"));
   await copyDir(getCompositorPackageDir(), path.join(bundleRoot, "binaries"));
   await copyDir(
     path.join(root, "node_modules", "fomantic-ui-css"),
     path.join(bundleRoot, "assets", "fomantic-ui-css"),
   );
+};
+
+const verifyBundledRuntimeAssets = () => {
+  const browserExecutable = findFirstMatchingFile(
+    path.join(bundleRoot, "browser"),
+    [
+      "chrome-headless-shell.exe",
+      "chrome-headless-shell",
+      "chrome.exe",
+      "chrome",
+    ],
+  );
+  const ffmpegPath = findFirstMatchingFile(path.join(bundleRoot, "binaries"), [
+    "ffmpeg",
+    "ffmpeg.exe",
+  ]);
+  const ffprobePath = findFirstMatchingFile(path.join(bundleRoot, "binaries"), [
+    "ffprobe",
+    "ffprobe.exe",
+  ]);
+
+  if (!browserExecutable) {
+    throw new Error(
+      "Bundled browser executable is missing from release payload",
+    );
+  }
+  if (!ffmpegPath) {
+    throw new Error(
+      "Bundled ffmpeg executable is missing from release payload",
+    );
+  }
+  if (!ffprobePath) {
+    throw new Error(
+      "Bundled ffprobe executable is missing from release payload",
+    );
+  }
+
+  return {
+    browserExecutableRelativePath: relativeToBundleRoot(browserExecutable),
+    compositorRootRelativePath: "binaries",
+    ffmpegRelativePath: relativeToBundleRoot(ffmpegPath),
+    ffprobeRelativePath: relativeToBundleRoot(ffprobePath),
+  } satisfies RuntimeAssetSnapshot;
 };
 
 const buildWindowsInstaller = async () => {
@@ -134,9 +327,12 @@ const buildWindowsInstaller = async () => {
   await copyDir(bundleRoot, path.join(installRoot, "app"));
 
   const nsisScriptPath = path.join(stageRoot, "windows-installer.nsi");
-  const installerOutfile = path.join(artifactsRoot, getReleaseFileName("-setup.exe"));
+  const installerStagePath = path.join(
+    stageRoot,
+    `${productName}-installer.exe`,
+  );
   const escapedInstallRoot = escapeForNsis(installRoot);
-  const escapedOutput = escapeForNsis(installerOutfile);
+  const escapedOutput = escapeForNsis(installerStagePath);
   const escapedDisplayName = escapeForNsis(displayName);
   const escapedVersion = escapeForNsis(version);
 
@@ -187,6 +383,8 @@ SectionEnd
 
   await fs.promises.writeFile(nsisScriptPath, script, "utf8");
   runCommand("makensis", [nsisScriptPath]);
+
+  return installerStagePath;
 };
 
 const buildMacInstaller = async () => {
@@ -230,7 +428,11 @@ const buildMacInstaller = async () => {
 </dict>
 </plist>
 `;
-  await fs.promises.writeFile(path.join(contentsDir, "Info.plist"), plistContent, "utf8");
+  await fs.promises.writeFile(
+    path.join(contentsDir, "Info.plist"),
+    plistContent,
+    "utf8",
+  );
 
   const dmgStageRoot = path.join(stageRoot, "mac-dmg");
   await ensureDir(dmgStageRoot);
@@ -241,9 +443,7 @@ const buildMacInstaller = async () => {
     fs.symlinkSync("/Applications", applicationsLink);
   }
 
-  const dmgOutfile = path.join(artifactsRoot, getReleaseFileName(".dmg"));
-  const tempDmg = path.join(os.tmpdir(), `${productName}-${Date.now()}.dmg`);
-
+  const installerStagePath = path.join(stageRoot, `${productName}.dmg`);
   runCommand("hdiutil", [
     "create",
     "-volname",
@@ -253,27 +453,155 @@ const buildMacInstaller = async () => {
     "-ov",
     "-format",
     "UDZO",
-    tempDmg,
+    installerStagePath,
   ]);
 
-  await copyFile(tempDmg, dmgOutfile);
-  await removeIfExists(tempDmg);
+  return installerStagePath;
+};
+
+const finalizeInstallerArtifact = async (installerStagePath: string) => {
+  return createAliasedArtifact({
+    kind: "installer",
+    sourcePath: installerStagePath,
+    stableFileName: `${productName}-${releaseTarget.installerStableSuffix}`,
+    versionedFileName: `${productName}-${releaseTarget.installerVersionedSuffix}`,
+  });
+};
+
+const createDownloadUrls = (fileName: string) => {
+  if (!repository) {
+    return {
+      latest: null,
+      versioned: null,
+    };
+  }
+
+  return {
+    latest: `${repository}/releases/latest/download/${fileName}`,
+    versioned: `${repository}/releases/download/${releaseTag}/${fileName}`,
+  };
+};
+
+const writeManifestArtifacts = async (
+  installerArtifact: AliasedArtifact,
+  runtimeAssets: RuntimeAssetSnapshot,
+) => {
+  const stableFileName = `${productName}-${releaseTarget.slug}-runtime.json`;
+  const versionedFileName = `${productName}-${releaseTag}-${releaseTarget.slug}-runtime.json`;
+  const manifestStagePath = path.join(
+    stageRoot,
+    `${releaseTarget.slug}-runtime.json`,
+  );
+
+  const manifest = {
+    productName,
+    displayName,
+    version,
+    releaseTag,
+    repository,
+    generatedAt: new Date().toISOString(),
+    target: {
+      platform: releaseTarget.platform,
+      arch: releaseTarget.arch,
+      slug: releaseTarget.slug,
+    },
+    installer: {
+      stableFileName: installerArtifact.stableFileName,
+      versionedFileName: installerArtifact.versionedFileName,
+      sizeBytes: installerArtifact.sizeBytes,
+      sha256: installerArtifact.sha256,
+      downloadUrls: {
+        stable: createDownloadUrls(installerArtifact.stableFileName).latest,
+        versioned: createDownloadUrls(installerArtifact.versionedFileName)
+          .versioned,
+      },
+    },
+    bundledRuntime: {
+      browserExecutable: runtimeAssets.browserExecutableRelativePath,
+      compositorRoot: runtimeAssets.compositorRootRelativePath,
+      ffmpeg: runtimeAssets.ffmpegRelativePath,
+      ffprobe: runtimeAssets.ffprobeRelativePath,
+      resources: ["ui", "build", "templates", "assets/fomantic-ui-css"],
+    },
+    notes: [
+      "Installer includes Chromium browser, Remotion compositor, ffmpeg, ffprobe, templates and UI assets.",
+      "No extra runtime dependency download is required after installation.",
+    ],
+  };
+
+  await fs.promises.writeFile(
+    manifestStagePath,
+    JSON.stringify(manifest, null, 2),
+    "utf8",
+  );
+
+  return createAliasedArtifact({
+    kind: "manifest",
+    sourcePath: manifestStagePath,
+    stableFileName,
+    versionedFileName,
+  });
+};
+
+const writeChecksumArtifacts = async (artifacts: AliasedArtifact[]) => {
+  const stableFileName = `${productName}-${releaseTarget.slug}-sha256.txt`;
+  const versionedFileName = `${productName}-${releaseTag}-${releaseTarget.slug}-sha256.txt`;
+  const checksumStagePath = path.join(
+    stageRoot,
+    `${releaseTarget.slug}-sha256.txt`,
+  );
+
+  const lines = artifacts.flatMap((artifact) => [
+    `${artifact.sha256}  ${artifact.versionedFileName}`,
+    `${artifact.sha256}  ${artifact.stableFileName}`,
+  ]);
+
+  await fs.promises.writeFile(
+    `${checksumStagePath}`,
+    `${lines.join("\n")}\n`,
+    "utf8",
+  );
+
+  return createAliasedArtifact({
+    kind: "checksums",
+    sourcePath: checksumStagePath,
+    stableFileName,
+    versionedFileName,
+  });
 };
 
 const main = async () => {
   await stageRuntimeAssets();
+  const runtimeAssets = verifyBundledRuntimeAssets();
 
-  if (platform === "win32") {
+  let installerStagePath: string;
+  if (releaseTarget.platform === "windows") {
     console.log("Building Windows installer...");
-    await buildWindowsInstaller();
-  } else if (platform === "darwin") {
-    console.log("Building macOS installer...");
-    await buildMacInstaller();
+    installerStagePath = await buildWindowsInstaller();
   } else {
-    throw new Error(`Unsupported platform for installer build: ${platform}`);
+    console.log(`Building macOS installer (${releaseTarget.arch})...`);
+    installerStagePath = await buildMacInstaller();
   }
 
+  const installerArtifact = await finalizeInstallerArtifact(installerStagePath);
+  const manifestArtifact = await writeManifestArtifacts(
+    installerArtifact,
+    runtimeAssets,
+  );
+  const checksumArtifact = await writeChecksumArtifacts([
+    installerArtifact,
+    manifestArtifact,
+  ]);
+
   console.log(`Installer artifacts ready: ${artifactsRoot}`);
+  console.log(
+    [
+      `Stable installer: ${installerArtifact.stableFileName}`,
+      `Versioned installer: ${installerArtifact.versionedFileName}`,
+      `Runtime manifest: ${manifestArtifact.stableFileName}`,
+      `Checksums: ${checksumArtifact.stableFileName}`,
+    ].join("\n"),
+  );
 };
 
 main().catch((error) => {

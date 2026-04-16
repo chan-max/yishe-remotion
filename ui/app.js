@@ -27,28 +27,28 @@ const icons = {
 
 function statusBadge(status) {
   const map = {
-    queued: { cls: 'badge-default', label: 'Queued' },
-    'in-progress': { cls: 'badge-blue', label: 'Rendering' },
-    completed: { cls: 'badge-green', label: 'Done' },
-    failed: { cls: 'badge-red', label: 'Failed' },
-    cancelled: { cls: 'badge-amber', label: 'Cancelled' },
+    queued: { cls: "badge-default", label: "Queued" },
+    "in-progress": { cls: "badge-blue", label: "Rendering" },
+    completed: { cls: "badge-green", label: "Done" },
+    failed: { cls: "badge-red", label: "Failed" },
+    cancelled: { cls: "badge-amber", label: "Cancelled" },
   };
-  return map[status] || { cls: 'badge-default', label: status };
+  return map[status] || { cls: "badge-default", label: status };
 }
 
 createApp({
   data() {
     return {
       templates: [],
-      selectedTemplateId: '',
-      templateSearch: '',
-      templateCategory: '全部',
-      inputPropsText: '{}',
+      selectedTemplateId: "",
+      templateSearch: "",
+      templateCategory: "全部",
+      inputPropsText: "{}",
       jobs: [],
-      activeMenu: 'templates',
+      activeMenu: "templates",
       loadingTemplates: false,
       creating: false,
-      errorMessage: '',
+      errorMessage: "",
       pollTimer: null,
       toasts: [],
       globalLoading: false,
@@ -67,7 +67,9 @@ createApp({
 
   computed: {
     selectedTemplate() {
-      return this.templates.find((t) => t.id === this.selectedTemplateId) || null;
+      return (
+        this.templates.find((t) => t.id === this.selectedTemplateId) || null
+      );
     },
     templateCategories() {
       const counts = this.templates.reduce((acc, t) => {
@@ -75,63 +77,130 @@ createApp({
         return acc;
       }, {});
       return [
-        { label: '全部', value: '全部', count: this.templates.length },
+        { label: "全部", value: "全部", count: this.templates.length },
         ...Object.entries(counts)
-          .sort(([a], [b]) => a.localeCompare(b, 'zh-CN'))
+          .sort(([a], [b]) => a.localeCompare(b, "zh-CN"))
           .map(([label, count]) => ({ label, value: label, count })),
       ];
     },
     filteredTemplates() {
       const kw = this.templateSearch.trim().toLowerCase();
       return this.templates.filter((t) => {
-        if (this.templateCategory !== '全部' && t.category !== this.templateCategory) return false;
+        if (
+          this.templateCategory !== "全部" &&
+          t.category !== this.templateCategory
+        )
+          return false;
         if (!kw) return true;
-        const text = [t.id, t.name, t.description, t.category, t.style, t.useCase, t.durationLabel,
+        const text = [
+          t.id,
+          t.name,
+          t.description,
+          t.category,
+          t.style,
+          t.useCase,
+          t.durationLabel,
           ...(t.tags || []),
-          ...((t.scenes || []).map((s) => `${s.title} ${s.summary}`)),
+          ...(t.scenes || []).map((s) => `${s.title} ${s.summary}`),
           ...(t.animationHighlights || []),
-        ].filter(Boolean).join(' ').toLowerCase();
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
         return text.includes(kw);
       });
     },
     activeJobsCount() {
-      return this.jobs.filter((j) => j.status === 'queued' || j.status === 'in-progress').length;
+      return this.jobs.filter(
+        (j) => j.status === "queued" || j.status === "in-progress",
+      ).length;
     },
   },
 
   methods: {
-    icon(name) { return icons[name] || ''; },
+    icon(name) {
+      return icons[name] || "";
+    },
 
     statusBadge,
 
-    getMetaLine(t) {
-      if (!t) return '';
-      return [t.category, t.durationLabel, `${t.width}×${t.height}`, `${t.fps}fps`].join(' · ');
+    normalizeJob(job) {
+      const numericProgress = Number(job?.progress);
+      return {
+        id: String(job?.id || ""),
+        status: job?.status || "queued",
+        progress: Number.isFinite(numericProgress)
+          ? Math.max(0, Math.min(1, numericProgress))
+          : 0,
+        videoUrl: job?.videoUrl || "",
+        data: job?.data || {},
+        error:
+          typeof job?.error?.message === "string"
+            ? job.error.message
+            : String(job?.error || ""),
+        createdAt: job?.createdAt || null,
+        startedAt: job?.startedAt || null,
+        completedAt: job?.completedAt || null,
+        updatedAt: job?.updatedAt || null,
+        elapsedMs: job?.elapsedMs || null,
+      };
     },
 
-    showToast(message, type = 'info') {
+    upsertJob(job) {
+      const normalizedJob = this.normalizeJob(job);
+      if (!normalizedJob.id) return;
+      const currentIndex = this.jobs.findIndex(
+        (item) => item.id === normalizedJob.id,
+      );
+      if (currentIndex === -1) {
+        this.jobs.unshift(normalizedJob);
+        return;
+      }
+      this.jobs.splice(currentIndex, 1, {
+        ...this.jobs[currentIndex],
+        ...normalizedJob,
+      });
+    },
+
+    getMetaLine(t) {
+      if (!t) return "";
+      return [
+        t.category,
+        t.durationLabel,
+        `${t.width}×${t.height}`,
+        `${t.fps}fps`,
+      ].join(" · ");
+    },
+
+    showToast(message, type = "info") {
       const id = Date.now() + Math.random();
       this.toasts.push({ id, message, type });
-      setTimeout(() => { this.toasts = this.toasts.filter((t) => t.id !== id); }, 4000);
+      setTimeout(() => {
+        this.toasts = this.toasts.filter((t) => t.id !== id);
+      }, 4000);
     },
 
     async fetchTemplates() {
       this.loadingTemplates = true;
       this.globalLoading = true;
-      this.errorMessage = '';
+      this.errorMessage = "";
       try {
-        const res = await fetch('/api/templates');
+        const res = await fetch("/api/templates");
         const result = await res.json();
-        if (!result.success) throw new Error(result.message || '获取模板失败');
+        if (!result.success) throw new Error(result.message || "获取模板失败");
         this.templates = result.data;
         if (!this.selectedTemplateId && result.data.length > 0) {
           this.selectedTemplateId = result.data[0].id;
-          this.inputPropsText = JSON.stringify(result.data[0].defaultInputProps, null, 2);
+          this.inputPropsText = JSON.stringify(
+            result.data[0].defaultInputProps,
+            null,
+            2,
+          );
         }
-        this.showToast(`已加载 ${result.data.length} 个模板`, 'success');
+        this.showToast(`已加载 ${result.data.length} 个模板`, "success");
       } catch (e) {
         this.errorMessage = e.message;
-        this.showToast(e.message, 'error');
+        this.showToast(e.message, "error");
       } finally {
         this.loadingTemplates = false;
         this.globalLoading = false;
@@ -153,7 +222,10 @@ createApp({
 
     setTemplateCategory(cat) {
       this.templateCategory = cat;
-      if (!this.filteredTemplates.some((t) => t.id === this.selectedTemplateId) && this.filteredTemplates.length > 0) {
+      if (
+        !this.filteredTemplates.some((t) => t.id === this.selectedTemplateId) &&
+        this.filteredTemplates.length > 0
+      ) {
         this.selectTemplate(this.filteredTemplates[0].id);
       }
     },
@@ -162,37 +234,51 @@ createApp({
       try {
         return { ok: true, data: JSON.parse(this.inputPropsText) };
       } catch {
-        return { ok: false, message: 'inputProps 不是合法 JSON' };
+        return { ok: false, message: "inputProps 不是合法 JSON" };
       }
     },
 
     async createRenderJob() {
-      this.errorMessage = '';
-      if (!this.selectedTemplateId) { this.showToast('请先选择模板', 'error'); return; }
+      this.errorMessage = "";
+      if (!this.selectedTemplateId) {
+        this.showToast("请先选择模板", "error");
+        return;
+      }
       const parsed = this.parseInputProps();
-      if (!parsed.ok) { this.errorMessage = parsed.message; this.showToast(parsed.message, 'error'); return; }
+      if (!parsed.ok) {
+        this.errorMessage = parsed.message;
+        this.showToast(parsed.message, "error");
+        return;
+      }
       this.creating = true;
       this.globalLoading = true;
       try {
-        const res = await fetch('/api/renders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ templateId: this.selectedTemplateId, inputProps: parsed.data }),
+        const res = await fetch("/api/renders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            templateId: this.selectedTemplateId,
+            inputProps: parsed.data,
+          }),
         });
         const result = await res.json();
-        if (!result.success) throw new Error(result.message || '创建任务失败');
-        this.jobs.unshift({
+        if (!result.success) throw new Error(result.message || "创建任务失败");
+        this.upsertJob({
           id: result.data.jobId,
-          status: result.data.status || 'queued',
+          status: result.data.status || "queued",
           progress: 0,
-          videoUrl: '',
-          data: { templateId: this.selectedTemplateId, inputProps: parsed.data },
+          videoUrl: "",
+          data: {
+            templateId: this.selectedTemplateId,
+            inputProps: parsed.data,
+          },
         });
-        this.showToast('渲染任务已创建', 'success');
-        this.activeMenu = 'jobs';
+        void this.fetchJobs({ silent: true });
+        this.showToast("渲染任务已创建", "success");
+        this.activeMenu = "jobs";
       } catch (e) {
         this.errorMessage = e.message;
-        this.showToast(e.message, 'error');
+        this.showToast(e.message, "error");
       } finally {
         this.creating = false;
         this.globalLoading = false;
@@ -200,44 +286,65 @@ createApp({
     },
 
     async createRenderSync() {
-      this.errorMessage = '';
+      this.errorMessage = "";
       this.syncResult = null;
-      if (!this.selectedTemplateId) { this.showToast('请先选择模板', 'error'); return; }
+      if (!this.selectedTemplateId) {
+        this.showToast("请先选择模板", "error");
+        return;
+      }
       const parsed = this.parseInputProps();
-      if (!parsed.ok) { this.errorMessage = parsed.message; this.showToast(parsed.message, 'error'); return; }
+      if (!parsed.ok) {
+        this.errorMessage = parsed.message;
+        this.showToast(parsed.message, "error");
+        return;
+      }
       this.syncRendering = true;
       this.globalLoading = true;
       try {
-        const res = await fetch('/api/renders/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ templateId: this.selectedTemplateId, inputProps: parsed.data, timeoutMs: Number(this.syncTimeoutMs) }),
+        const res = await fetch("/api/renders/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            templateId: this.selectedTemplateId,
+            inputProps: parsed.data,
+            timeoutMs: Number(this.syncTimeoutMs),
+          }),
         });
         const result = await res.json();
-        if (!result.success) throw new Error(result.message || '同步渲染失败');
-        this.syncResult = { jobId: result.data.jobId, status: result.data.status, videoUrl: result.data.videoUrl };
-        this.showToast('同步渲染完成', 'success');
+        if (!result.success) throw new Error(result.message || "同步渲染失败");
+        this.syncResult = {
+          jobId: result.data.jobId,
+          status: result.data.status,
+          videoUrl: result.data.videoUrl,
+        };
+        this.showToast("同步渲染完成", "success");
       } catch (e) {
         this.errorMessage = e.message;
-        this.showToast(e.message, 'error');
+        this.showToast(e.message, "error");
       } finally {
         this.syncRendering = false;
         this.globalLoading = false;
       }
     },
 
+    async fetchJobs({ silent = false } = {}) {
+      try {
+        const res = await fetch("/api/renders");
+        const result = await res.json();
+        if (!result.success) throw new Error(result.message || "获取任务失败");
+        const jobList = Array.isArray(result.data) ? result.data : [];
+        this.jobs = jobList
+          .map((job) => this.normalizeJob(job))
+          .filter((job) => job.id);
+      } catch (e) {
+        if (!silent) {
+          this.showToast(e.message, "error");
+        }
+      }
+    },
+
     async refreshJobs() {
-      if (!this.jobs.length) return;
-      const updated = await Promise.all(this.jobs.map(async (job) => {
-        try {
-          const res = await fetch(`/api/renders/${job.id}`);
-          const result = await res.json();
-          if (!result.success) return job;
-          const d = result.data;
-          return { id: job.id, status: d.status, progress: d.progress ?? 0, videoUrl: d.videoUrl || '', data: d.data || job.data, error: d.error?.message || '' };
-        } catch { return job; }
-      }));
-      this.jobs = updated;
+      await this.fetchJobs({ silent: true });
     },
 
     startPolling() {
@@ -246,69 +353,85 @@ createApp({
     },
 
     stopPolling() {
-      if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+      if (this.pollTimer) {
+        clearInterval(this.pollTimer);
+        this.pollTimer = null;
+      }
     },
 
     formatSize(size) {
-      if (size < 1024) return size + ' B';
-      if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB';
-      if (size < 1024 * 1024 * 1024) return (size / 1024 / 1024).toFixed(1) + ' MB';
-      return (size / 1024 / 1024 / 1024).toFixed(1) + ' GB';
+      if (size < 1024) return size + " B";
+      if (size < 1024 * 1024) return (size / 1024).toFixed(1) + " KB";
+      if (size < 1024 * 1024 * 1024)
+        return (size / 1024 / 1024).toFixed(1) + " MB";
+      return (size / 1024 / 1024 / 1024).toFixed(1) + " GB";
     },
 
     async fetchRendersFolders(page = 1) {
       this.rendersFoldersLoading = true;
       try {
-        const res = await fetch(`/api/renders-folders?page=${page}&pageSize=${this.rendersFoldersPageSize}`);
+        const res = await fetch(
+          `/api/renders-folders?page=${page}&pageSize=${this.rendersFoldersPageSize}`,
+        );
         const result = await res.json();
-        if (!result.success) throw new Error(result.message || '获取失败');
+        if (!result.success) throw new Error(result.message || "获取失败");
         this.rendersFolders = result.data.list;
         this.rendersFoldersPage = result.data.page;
         this.rendersFoldersTotal = result.data.total;
       } catch (e) {
-        this.showToast(e.message, 'error');
+        this.showToast(e.message, "error");
       } finally {
         this.rendersFoldersLoading = false;
       }
     },
 
     async deleteRendersFoldersBatch() {
-      if (!this.rendersFoldersSelected.length) { this.showToast('请先勾选文件', 'error'); return; }
+      if (!this.rendersFoldersSelected.length) {
+        this.showToast("请先勾选文件", "error");
+        return;
+      }
       this.rendersFoldersDeleteLoading = true;
       try {
-        const res = await fetch('/api/renders-folders', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
+        const res = await fetch("/api/renders-folders", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ names: this.rendersFoldersSelected }),
         });
         const result = await res.json();
-        if (!result.success) throw new Error(result.message || '删除失败');
-        this.showToast(`已删除 ${result.data.deleted.length} 项`, 'success');
-        if (result.data.failed.length) this.showToast(`${result.data.failed.length} 项失败`, 'error');
+        if (!result.success) throw new Error(result.message || "删除失败");
+        this.showToast(`已删除 ${result.data.deleted.length} 项`, "success");
+        if (result.data.failed.length)
+          this.showToast(`${result.data.failed.length} 项失败`, "error");
         this.rendersFoldersSelected = [];
         this.fetchRendersFolders(this.rendersFoldersPage);
       } catch (e) {
-        this.showToast(e.message, 'error');
+        this.showToast(e.message, "error");
       } finally {
         this.rendersFoldersDeleteLoading = false;
       }
     },
 
     onRendersFoldersPageChange(page) {
-      const maxPage = Math.ceil(this.rendersFoldersTotal / this.rendersFoldersPageSize) || 1;
+      const maxPage =
+        Math.ceil(this.rendersFoldersTotal / this.rendersFoldersPageSize) || 1;
       if (page < 1 || page > maxPage) return;
       this.fetchRendersFolders(page);
     },
 
     toggleAllFiles(e) {
-      this.rendersFoldersSelected = e.target.checked ? this.rendersFolders.map((f) => f.name) : [];
+      this.rendersFoldersSelected = e.target.checked
+        ? this.rendersFolders.map((f) => f.name)
+        : [];
     },
   },
 
   async mounted() {
-    await this.fetchTemplates();
+    await Promise.all([
+      this.fetchTemplates(),
+      this.fetchJobs({ silent: true }),
+      this.fetchRendersFolders(1),
+    ]);
     this.startPolling();
-    this.fetchRendersFolders(1);
   },
 
   beforeUnmount() {
@@ -357,7 +480,10 @@ createApp({
           <button class="nav-item" :class="{ active: activeMenu === 'jobs' }" @click="activeMenu = 'jobs'">
             <span v-html="icon('tasks')"></span>
             渲染任务
-            <span v-if="activeJobsCount > 0" class="nav-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;">{{ activeJobsCount }}</span>
+            <span v-if="activeJobsCount > 0" class="nav-loading-state">
+              <span class="spinner spinner-sm nav-loading-spinner"></span>
+              <span class="nav-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;">{{ activeJobsCount }}</span>
+            </span>
             <span v-else class="nav-badge">{{ jobs.length }}</span>
           </button>
 
@@ -851,4 +977,4 @@ createApp({
       </main>
     </div>
   `,
-}).mount('#app');
+}).mount("#app");
