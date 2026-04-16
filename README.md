@@ -59,6 +59,7 @@ Each build now emits:
 
 - A versioned installer artifact
 - A stable installer artifact name for fixed download URLs
+- A plugin runtime bundle zip for `yishe-client` managed plugin distribution
 - A runtime manifest JSON
 - A SHA256 checksum file
 
@@ -91,6 +92,15 @@ The workflow uploads stable file names so clients can always download the latest
   `https://github.com/chan-max/yishe-remotion/releases/latest/download/yishe-video-tool-macos-x64.dmg`
 - macOS Apple Silicon:
   `https://github.com/chan-max/yishe-remotion/releases/latest/download/yishe-video-tool-macos-arm64.dmg`
+
+Managed-plugin runtime zips are also published under stable URLs:
+
+- Windows x64:
+  `https://github.com/chan-max/yishe-remotion/releases/latest/download/yishe-remotion-windows-x64-plugin.zip`
+- macOS Intel:
+  `https://github.com/chan-max/yishe-remotion/releases/latest/download/yishe-remotion-macos-x64-plugin.zip`
+- macOS Apple Silicon:
+  `https://github.com/chan-max/yishe-remotion/releases/latest/download/yishe-remotion-macos-arm64-plugin.zip`
 
 Matching runtime manifests and checksum files are also published under the same `latest/download/` pattern.
 

@@ -23,7 +23,7 @@ type RuntimeAssetSnapshot = {
 };
 
 type AliasedArtifact = {
-  kind: "installer" | "manifest" | "checksums";
+  kind: "installer" | "plugin-bundle" | "manifest" | "checksums";
   sizeBytes: number;
   sha256: string;
   stableFileName: string;
@@ -37,6 +37,7 @@ const releaseRoot = path.join(root, "release");
 const stageRoot = path.join(releaseRoot, "stage");
 const distRoot = path.join(releaseRoot, "dist");
 const bundleRoot = path.join(stageRoot, "app");
+const pluginRuntimeStageRoot = path.join(stageRoot, "plugin-runtime");
 const artifactsRoot = path.join(distRoot, "artifacts");
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(root, "package.json"), "utf8"),
@@ -44,6 +45,7 @@ const packageJson = JSON.parse(
 
 const productName = "yishe-video-tool";
 const displayName = "Yishe Video Tool";
+const pluginName = "yishe-remotion";
 const version = process.env.RELEASE_VERSION ?? packageJson.version;
 const releaseTag = process.env.RELEASE_TAG ?? `v${version}`;
 const repository = process.env.GITHUB_REPOSITORY
@@ -53,6 +55,8 @@ const repository = process.env.GITHUB_REPOSITORY
 const executableName =
   process.platform === "win32" ? `${productName}.exe` : productName;
 const compiledExecutable = path.join(stageRoot, executableName);
+const pluginExecutableName =
+  process.platform === "win32" ? `${pluginName}.exe` : pluginName;
 
 const removeIfExists = async (targetPath: string) => {
   await fs.promises.rm(targetPath, { recursive: true, force: true });
@@ -85,6 +89,88 @@ const runCommand = (command: string, args: string[]) => {
 
 const runBun = (args: string[]) => {
   runCommand(process.execPath, args);
+};
+
+const createZipFromDirectory = async (
+  sourceDir: string,
+  zipPath: string,
+) => {
+  await removeIfExists(zipPath);
+
+  if (process.platform === "win32") {
+    runCommand("powershell.exe", [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      `Compress-Archive -LiteralPath '${sourceDir.replace(/'/g, "''")}' -DestinationPath '${zipPath.replace(/'/g, "''")}' -Force`,
+    ]);
+    return;
+  }
+
+  runCommand("ditto", ["-c", "-k", "--keepParent", sourceDir, zipPath]);
+};
+
+const commandExists = (command: string) => {
+  const lookupCommand = process.platform === "win32" ? "where.exe" : "which";
+
+  try {
+    execFileSync(lookupCommand, [command], {
+      cwd: root,
+      stdio: "pipe",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const resolveWindowsMakensis = () => {
+  if (process.platform !== "win32") {
+    return "makensis";
+  }
+
+  const envPath = process.env.MAKENSIS_PATH;
+  if (envPath && fs.existsSync(envPath)) {
+    return envPath;
+  }
+
+  const nsisHome = process.env.NSIS_HOME;
+  if (nsisHome) {
+    const nsisHomeBinary = path.join(nsisHome, "makensis.exe");
+    if (fs.existsSync(nsisHomeBinary)) {
+      return nsisHomeBinary;
+    }
+  }
+
+  if (commandExists("makensis")) {
+    return "makensis";
+  }
+
+  const candidatePaths = [
+    process.env["ProgramFiles(x86)"]
+      ? path.join(process.env["ProgramFiles(x86)"], "NSIS", "makensis.exe")
+      : null,
+    process.env.ProgramFiles
+      ? path.join(process.env.ProgramFiles, "NSIS", "makensis.exe")
+      : null,
+    "C:\\ProgramData\\chocolatey\\bin\\makensis.exe",
+    "C:\\ProgramData\\chocolatey\\lib\\nsis\\tools\\makensis.exe",
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  const resolvedCandidate = candidatePaths.find((candidate) =>
+    fs.existsSync(candidate),
+  );
+  if (resolvedCandidate) {
+    return resolvedCandidate;
+  }
+
+  throw new Error(
+    [
+      "NSIS is required to build the Windows installer, but makensis.exe could not be found.",
+      "Install NSIS and make sure makensis is on PATH, or set MAKENSIS_PATH / NSIS_HOME.",
+      "For GitHub Actions Windows runners, install NSIS and export its directory through GITHUB_PATH.",
+    ].join(" "),
+  );
 };
 
 const escapeForNsis = (value: string) => {
@@ -240,6 +326,7 @@ const stageRuntimeAssets = async () => {
   console.log("Preparing desktop release stage...");
   await removeIfExists(releaseRoot);
   await ensureDir(bundleRoot);
+  await ensureDir(pluginRuntimeStageRoot);
   await ensureDir(artifactsRoot);
 
   console.log("Compiling application executable...");
@@ -379,10 +466,10 @@ Section "Uninstall"
   RMDir /r "$INSTDIR"
   DeleteRegKey HKLM "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${productName}"
 SectionEnd
-`.trim();
+  `.trim();
 
   await fs.promises.writeFile(nsisScriptPath, script, "utf8");
-  runCommand("makensis", [nsisScriptPath]);
+  runCommand(resolveWindowsMakensis(), [nsisScriptPath]);
 
   return installerStagePath;
 };
@@ -459,12 +546,44 @@ const buildMacInstaller = async () => {
   return installerStagePath;
 };
 
+const buildPluginRuntimeBundle = async () => {
+  const pluginRoot = path.join(pluginRuntimeStageRoot, pluginName);
+  await removeIfExists(pluginRoot);
+  await ensureDir(pluginRoot);
+
+  await copyFile(
+    compiledExecutable,
+    path.join(pluginRoot, pluginExecutableName),
+  );
+  await copyDir(bundleRoot, path.join(pluginRoot, "app"));
+
+  if (process.platform !== "win32") {
+    runCommand("chmod", ["+x", path.join(pluginRoot, pluginExecutableName)]);
+  }
+
+  const zipStagePath = path.join(
+    stageRoot,
+    `${pluginName}-${releaseTarget.slug}-plugin.zip`,
+  );
+  await createZipFromDirectory(pluginRoot, zipStagePath);
+  return zipStagePath;
+};
+
 const finalizeInstallerArtifact = async (installerStagePath: string) => {
   return createAliasedArtifact({
     kind: "installer",
     sourcePath: installerStagePath,
     stableFileName: `${productName}-${releaseTarget.installerStableSuffix}`,
     versionedFileName: `${productName}-${releaseTarget.installerVersionedSuffix}`,
+  });
+};
+
+const finalizePluginBundleArtifact = async (pluginBundleStagePath: string) => {
+  return createAliasedArtifact({
+    kind: "plugin-bundle",
+    sourcePath: pluginBundleStagePath,
+    stableFileName: `${pluginName}-${releaseTarget.slug}-plugin.zip`,
+    versionedFileName: `${pluginName}-${releaseTag}-${releaseTarget.slug}-plugin.zip`,
   });
 };
 
@@ -484,6 +603,7 @@ const createDownloadUrls = (fileName: string) => {
 
 const writeManifestArtifacts = async (
   installerArtifact: AliasedArtifact,
+  pluginBundleArtifact: AliasedArtifact,
   runtimeAssets: RuntimeAssetSnapshot,
 ) => {
   const stableFileName = `${productName}-${releaseTarget.slug}-runtime.json`;
@@ -516,6 +636,20 @@ const writeManifestArtifacts = async (
           .versioned,
       },
     },
+    pluginBundle: {
+      stableFileName: pluginBundleArtifact.stableFileName,
+      versionedFileName: pluginBundleArtifact.versionedFileName,
+      sizeBytes: pluginBundleArtifact.sizeBytes,
+      sha256: pluginBundleArtifact.sha256,
+      executableName: pluginExecutableName,
+      rootDirectory: pluginName,
+      bundledAppDirectory: "app",
+      downloadUrls: {
+        stable: createDownloadUrls(pluginBundleArtifact.stableFileName).latest,
+        versioned: createDownloadUrls(pluginBundleArtifact.versionedFileName)
+          .versioned,
+      },
+    },
     bundledRuntime: {
       browserExecutable: runtimeAssets.browserExecutableRelativePath,
       compositorRoot: runtimeAssets.compositorRootRelativePath,
@@ -525,6 +659,7 @@ const writeManifestArtifacts = async (
     },
     notes: [
       "Installer includes Chromium browser, Remotion compositor, ffmpeg, ffprobe, templates and UI assets.",
+      "Plugin bundle zip is intended for yishe-client managed plugin distribution.",
       "No extra runtime dependency download is required after installation.",
     ],
   };
@@ -583,13 +718,19 @@ const main = async () => {
     installerStagePath = await buildMacInstaller();
   }
 
+  const pluginBundleStagePath = await buildPluginRuntimeBundle();
   const installerArtifact = await finalizeInstallerArtifact(installerStagePath);
+  const pluginBundleArtifact = await finalizePluginBundleArtifact(
+    pluginBundleStagePath,
+  );
   const manifestArtifact = await writeManifestArtifacts(
     installerArtifact,
+    pluginBundleArtifact,
     runtimeAssets,
   );
   const checksumArtifact = await writeChecksumArtifacts([
     installerArtifact,
+    pluginBundleArtifact,
     manifestArtifact,
   ]);
 
@@ -598,6 +739,7 @@ const main = async () => {
     [
       `Stable installer: ${installerArtifact.stableFileName}`,
       `Versioned installer: ${installerArtifact.versionedFileName}`,
+      `Plugin bundle: ${pluginBundleArtifact.stableFileName}`,
       `Runtime manifest: ${manifestArtifact.stableFileName}`,
       `Checksums: ${checksumArtifact.stableFileName}`,
     ].join("\n"),
