@@ -1,10 +1,11 @@
 {
-  "name": "yishe-remotion",
+  "name": "yishe-video-tool",
   "version": "1.0.6",
-  "description": "My Remotion video",
+  "description": "Yishe local video template rendering tool",
   "repository": {},
   "license": "UNLICENSED",
   "private": true,
+  "packageManager": "bun@1.2.22",
   "dependencies": {
     "@remotion/bundler": "4.0.434",
     "@remotion/cli": "4.0.434",

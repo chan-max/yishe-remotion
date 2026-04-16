@@ -120,7 +120,7 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
 
   // Host renders on /renders
   app.use("/renders", express.static(rendersDir));
-  const semanticDir = path.resolve("node_modules/fomantic-ui-css");
+  const semanticDir = runtimePaths.semanticDir ?? path.resolve("node_modules/fomantic-ui-css");
   if (fs.existsSync(semanticDir)) {
     app.use("/semantic", express.static(semanticDir));
   }
@@ -131,7 +131,7 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
     res.json(
       success(
         {
-          service: "yishe-remotion",
+          service: "yishe-video-tool",
           status: "ok",
           templateCount: getTemplates().length,
           bundleUrl: remotionBundleUrl,
