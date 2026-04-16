@@ -110,17 +110,24 @@ const createZipFromDirectory = async (
   runCommand("ditto", ["-c", "-k", "--keepParent", sourceDir, zipPath]);
 };
 
-const commandExists = (command: string) => {
+const resolveCommandPath = (command: string) => {
   const lookupCommand = process.platform === "win32" ? "where.exe" : "which";
 
   try {
-    execFileSync(lookupCommand, [command], {
+    const output = execFileSync(lookupCommand, [command], {
       cwd: root,
       stdio: "pipe",
+      encoding: "utf8",
     });
-    return true;
+
+    const resolvedPath = String(output || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0);
+
+    return resolvedPath || null;
   } catch {
-    return false;
+    return null;
   }
 };
 
@@ -142,8 +149,9 @@ const resolveWindowsMakensis = () => {
     }
   }
 
-  if (commandExists("makensis")) {
-    return "makensis";
+  const resolvedFromPath = resolveCommandPath("makensis");
+  if (resolvedFromPath) {
+    return resolvedFromPath;
   }
 
   const candidatePaths = [
@@ -152,6 +160,22 @@ const resolveWindowsMakensis = () => {
       : null,
     process.env.ProgramFiles
       ? path.join(process.env.ProgramFiles, "NSIS", "makensis.exe")
+      : null,
+    process.env["ChocolateyInstall"]
+      ? path.join(
+          process.env["ChocolateyInstall"],
+          "bin",
+          "makensis.exe",
+        )
+      : null,
+    process.env["ChocolateyInstall"]
+      ? path.join(
+          process.env["ChocolateyInstall"],
+          "lib",
+          "nsis",
+          "tools",
+          "makensis.exe",
+        )
       : null,
     "C:\\ProgramData\\chocolatey\\bin\\makensis.exe",
     "C:\\ProgramData\\chocolatey\\lib\\nsis\\tools\\makensis.exe",
