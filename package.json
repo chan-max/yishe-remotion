@@ -1,6 +1,6 @@
 {
   "name": "yishe-remotion",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "My Remotion video",
   "repository": {},
   "license": "UNLICENSED",
@@ -29,10 +29,11 @@
     "typescript": "5.9.3"
   },
   "scripts": {
-    "build": "remotion bundle",
-    "dev": "tsx watch server",
-    "start": "tsx server",
+    "build": "bunx remotion bundle",
+    "dev": "bun --watch server/index.ts",
+    "start": "bun server/index.ts",
     "lint": "eslint . && tsc",
+    "release": "bun run scripts/release.ts",
     "remotion:upgrade": "remotion upgrade",
     "remotion:studio": "remotion studio"
   }

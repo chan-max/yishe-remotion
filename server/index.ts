@@ -1,12 +1,12 @@
 import express from "express";
 import { makeRenderQueue } from "./render-queue";
-import { bundle } from "@remotion/bundler";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";
 import { ensureBrowser } from "@remotion/renderer";
 import { success, error, ErrorCode } from "./response";
 import { publicTemplateCatalog } from "../templates/registry";
+import { ensureRuntimeDirectories } from "./runtime";
 
 const { PORT = 1572, REMOTION_SERVE_URL } = process.env;
 
@@ -28,15 +28,17 @@ const getLocalIp = () => {
 
 function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
   const app = express();
+  const runtimePaths = ensureRuntimeDirectories();
 
   const getTemplates = () => publicTemplateCatalog;
-
-  const rendersDir = path.resolve("renders");
+  const rendersDir = runtimePaths.rendersDir;
 
   const queue = makeRenderQueue({
     port: Number(PORT),
     serveUrl: remotionBundleUrl,
     rendersDir,
+    browserExecutable: runtimePaths.browserExecutable,
+    binariesDirectory: runtimePaths.binariesDir,
   });
 
   const formatJob = (job: {
@@ -118,8 +120,11 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
 
   // Host renders on /renders
   app.use("/renders", express.static(rendersDir));
-  app.use("/semantic", express.static(path.resolve("node_modules/fomantic-ui-css")));
-  app.use("/", express.static(path.resolve("ui")));
+  const semanticDir = path.resolve("node_modules/fomantic-ui-css");
+  if (fs.existsSync(semanticDir)) {
+    app.use("/semantic", express.static(semanticDir));
+  }
+  app.use("/", express.static(runtimePaths.uiDir));
   app.use(express.json());
 
   app.get("/api/health", (_req, res) => {
@@ -542,23 +547,32 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
   });
 
   app.use((_req, res) => {
-    res.sendFile(path.resolve("ui", "index.html"));
+    res.sendFile(path.join(runtimePaths.uiDir, "index.html"));
   });
 
   return app;
 }
 
 async function main() {
-  await ensureBrowser();
+  const runtimePaths = ensureRuntimeDirectories();
+  await ensureBrowser({
+    browserExecutable: runtimePaths.browserExecutable,
+    logLevel: "info",
+  });
 
   const remotionBundleUrl = REMOTION_SERVE_URL
     ? REMOTION_SERVE_URL
-    : await bundle({
-      entryPoint: path.resolve("remotion/index.ts"),
-      onProgress(progress) {
-        console.info(`Bundling Remotion project: ${progress}%`);
-      },
-    });
+    : fs.existsSync(runtimePaths.buildDir)
+      ? runtimePaths.buildDir
+      : await (async () => {
+        const { bundle } = await import("@remotion/bundler");
+        return bundle({
+          entryPoint: path.resolve("remotion/index.ts"),
+          onProgress(progress) {
+            console.info(`Bundling Remotion project: ${progress}%`);
+          },
+        });
+      })();
 
   const app = setupApp({ remotionBundleUrl });
 

@@ -55,10 +55,14 @@ export const makeRenderQueue = ({
   port,
   serveUrl,
   rendersDir,
+  browserExecutable,
+  binariesDirectory,
 }: {
   port: number;
   serveUrl: string;
   rendersDir: string;
+  browserExecutable: string | null;
+  binariesDirectory: string | null;
 }) => {
   const jobs = new Map<string, JobState>();
   let queue: Promise<unknown> = Promise.resolve();
@@ -89,6 +93,8 @@ export const makeRenderQueue = ({
         serveUrl,
         id: job.data.compositionId,
         inputProps,
+        browserExecutable,
+        binariesDirectory,
       });
 
       // 超时配置：支持通过环境变量 `RENDER_TIMEOUT_MS` 调整默认基准（毫秒）
@@ -109,6 +115,8 @@ export const makeRenderQueue = ({
         composition,
         inputProps,
         codec: "h264",
+        browserExecutable,
+        binariesDirectory,
         timeoutInMilliseconds,
         onProgress: (progress) => {
           console.info(`${jobId} render progress:`, progress.progress);
