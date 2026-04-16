@@ -52,13 +52,11 @@ type JobState =
   };
 
 export const makeRenderQueue = ({
-  port,
   serveUrl,
   rendersDir,
   browserExecutable,
   binariesDirectory,
 }: {
-  port: number;
   serveUrl: string;
   rendersDir: string;
   browserExecutable: string | null;
@@ -102,7 +100,9 @@ export const makeRenderQueue = ({
       const DEFAULT_TIMEOUT_MS = Number(process.env.RENDER_TIMEOUT_MS) || 120 * 1000;
 
       // 根据输入的 audioDuration 自动计算超时时间（毫秒），并确保至少为默认基准
-      const maybeAudioDuration = Number((inputProps as any)?.audioDuration || 0);
+      const maybeAudioDuration = Number(
+        (inputProps as Record<string, unknown>)?.audioDuration ?? 0,
+      );
       const computedFromAudio = maybeAudioDuration > 0
         ? Math.round(maybeAudioDuration * 1000 + 30 * 1000) // 音频时长 + 30s 余量
         : 0;
