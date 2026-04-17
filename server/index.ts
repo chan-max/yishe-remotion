@@ -45,6 +45,7 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
     data: unknown;
     progress?: number;
     videoUrl?: string;
+    localPath?: string;
     error?: Error;
     createdAt?: number;
     startedAt?: number;
@@ -87,6 +88,7 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
       data: unknown;
       progress?: number;
       videoUrl?: string;
+      localPath?: string;
       error?: Error;
       createdAt?: number;
       startedAt?: number;

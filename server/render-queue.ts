@@ -35,6 +35,7 @@ type JobState =
   | {
     status: "completed";
     videoUrl: string;
+    localPath: string;
     data: JobData;
     createdAt: number;
     startedAt: number;
@@ -108,6 +109,7 @@ export const makeRenderQueue = ({
         : 0;
 
       const timeoutInMilliseconds = Math.max(DEFAULT_TIMEOUT_MS, computedFromAudio || 0);
+      const outputLocation = path.join(rendersDir, `${jobId}.mp4`);
 
       await renderMedia({
         cancelSignal,
@@ -131,13 +133,14 @@ export const makeRenderQueue = ({
             updatedAt,
           });
         },
-        outputLocation: path.join(rendersDir, `${jobId}.mp4`),
+        outputLocation,
       });
 
       const completedAt = Date.now();
       jobs.set(jobId, {
         status: "completed",
         videoUrl: `/renders/${jobId}.mp4`,
+        localPath: outputLocation,
         data: job.data,
         createdAt: job.createdAt,
         startedAt,
